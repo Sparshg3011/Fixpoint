@@ -1,22 +1,18 @@
 #!/usr/bin/env python
-"""Step-1 gate: the two runs that make every future number trustworthy.
+"""Red/green calibration through the official harness.
 
-    RED    a do-nothing patch must leave the bug in place — FAIL_TO_PASS tests
-           fail, verdict unresolved. Proves the harness can see broken-ness.
-    GREEN  the human gold patch must grade RESOLVED — all F2P pass, all P2P
-           pass. Proves env build + patch apply + test scoping + log parsing
-           work end to end on this machine.
+    RED    a do-nothing patch must leave each bug in place — FAIL_TO_PASS
+           tests fail, verdict unresolved. Proves the harness sees broken-ness.
+    GREEN  the human gold patch must grade RESOLVED. Proves env build + patch
+           apply + test scoping + log parsing work end to end on this machine.
 
-If either half fails, nothing built downstream can be trusted, so this script
-exits nonzero and the plan says stop and fix.
+A red run also exposes mined-label noise: any FAIL_TO_PASS test that passes
+with no fix applied was flaky or coupled at dataset-construction time. Those
+get printed per instance, never averaged away.
 
 Usage:
-    python scripts/calibrate.py [instance_id] [--namespace swebench|none]
-
-The red run also answers an open question from our session-0 trace: any
-FAIL_TO_PASS test that *passes* under the no-op patch was flaky or coupled at
-dataset-mining time (F2P sets are mined from two executions, never authored).
-We print those anomalies instead of averaging them away.
+    python scripts/calibrate.py [instance_id]         # one instance
+    python scripts/calibrate.py --subset 25           # deterministic subset
 """
 
 from __future__ import annotations
@@ -33,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import swebench
 
-from fixpoint.bench import get, load_lite
+from fixpoint.bench import Instance, get, load_lite
+from fixpoint.eval import lite_subset
 from fixpoint.harness import (
     CALIB_DIR,
     NOOP_PATCH,
@@ -43,73 +40,100 @@ from fixpoint.harness import (
     write_predictions,
 )
 
-# Our session-0 trace instance: tiny gold patch, crisp issue, and one known
-# oddity in its F2P list — ideal for calibrating both the harness and us.
+# Our session-0 trace instance: tiny gold patch, crisp issue, one known F2P
+# anomaly — ideal for single-instance calibration.
 DEFAULT_INSTANCE = "django__django-11099"
 
 
-def run_half(name: str, predictions: str | Path, model_name: str, instance_id: str, namespace: str) -> dict:
-    """One calibration half: evaluate, read the report, time it."""
-    started = time.time()
-    print(f"[{name}] harness starting (namespace={namespace}) — log: {CALIB_DIR / f'calib-{name}.log'}")
-    run_official_eval(predictions, run_id=f"calib-{name}", instance_ids=[instance_id], namespace=namespace)
-    summary = summarize_report(read_instance_report(f"calib-{name}", model_name, instance_id))
-    summary["wall_s"] = round(time.time() - started, 1)
-    return summary
+def collect(run_id: str, model_name: str, instances: list[Instance]) -> dict[str, dict]:
+    """Read per-instance reports; a missing report is an env/harness error,
+    which for a subset run is a finding to record, not a reason to crash."""
+    out: dict[str, dict] = {}
+    for inst in instances:
+        try:
+            out[inst.instance_id] = summarize_report(
+                read_instance_report(run_id, model_name, inst.instance_id)
+            )
+        except FileNotFoundError:
+            out[inst.instance_id] = {"error": "no report — env build or harness failure"}
+    return out
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("instance_id", nargs="?", default=DEFAULT_INSTANCE)
+    parser.add_argument("--subset", type=int, default=None,
+                        help="calibrate the deterministic n-instance subset instead")
     parser.add_argument("--namespace", default="swebench", choices=["swebench", "none"],
                         help="swebench = pull prebuilt images; none = build locally")
+    parser.add_argument("--max-workers", type=int, default=None)
     args = parser.parse_args()
 
-    inst = get(load_lite(), args.instance_id)
+    instances = load_lite()
+    if args.subset:
+        chosen = lite_subset(instances, args.subset)
+        tag = f"s{args.subset}"
+    else:
+        chosen = [get(instances, args.instance_id)]
+        tag = chosen[0].instance_id
+    ids = [i.instance_id for i in chosen]
+    workers = args.max_workers or (3 if len(chosen) > 1 else 1)
+    print(f"calibrating {len(ids)} instance(s) [{tag}] with {workers} workers")
 
-    # RED: a syntactically-valid patch that fixes nothing (see NOOP_PATCH for
-    # why a literally empty patch would be silently skipped, proving nothing).
-    preds = write_predictions(CALIB_DIR / "noop_predictions.jsonl", "fixpoint-noop",
-                              {inst.instance_id: NOOP_PATCH})
-    red = run_half("red", preds, "fixpoint-noop", inst.instance_id, args.namespace)
+    started = time.time()
+    preds = write_predictions(CALIB_DIR / f"noop-{tag}.jsonl", "fixpoint-noop",
+                              {i: NOOP_PATCH for i in ids})
+    run_official_eval(preds, run_id=f"calib-red-{tag}", instance_ids=ids,
+                      namespace=args.namespace, max_workers=workers)
+    red = collect(f"calib-red-{tag}", "fixpoint-noop", chosen)
 
-    # GREEN: `-p gold` makes the harness grade the dataset's own human patch.
-    green = run_half("green", "gold", "gold", inst.instance_id, args.namespace)
+    run_official_eval("gold", run_id=f"calib-green-{tag}", instance_ids=ids,
+                      namespace=args.namespace, max_workers=workers)
+    green = collect(f"calib-green-{tag}", "gold", chosen)
+    wall = round(time.time() - started, 1)
 
     # ---- verdicts -----------------------------------------------------------
-    # Red must NOT require every F2P test to fail: a mined F2P entry that
-    # passes pre-fix is dataset noise, and we want it surfaced, not hidden.
-    gate_red = red["applied"] and not red["resolved"] and red["f2p_fail"] >= 1
-    gate_green = green["applied"] and green["resolved"]
-    anomalies = sorted(set(inst.fail_to_pass) - set(red["f2p_failing_tests"]))
+    # Red must NOT require every F2P test to fail (mined noise is expected);
+    # it must apply, stay unresolved, and have at least one truly failing F2P.
+    rows, failures, noise = [], [], {}
+    for inst in chosen:
+        r, g = red[inst.instance_id], green[inst.instance_id]
+        if "error" in r or "error" in g:
+            gate = "ERROR"
+        else:
+            ok_red = r["applied"] and not r["resolved"] and r["f2p_fail"] >= 1
+            ok_green = g["applied"] and g["resolved"]
+            gate = "PASS" if (ok_red and ok_green) else "FAIL"
+            anomalies = sorted(set(inst.fail_to_pass) - set(r["f2p_failing_tests"]))
+            if anomalies:
+                noise[inst.instance_id] = anomalies
+        if gate != "PASS":
+            failures.append(inst.instance_id)
+        rows.append((inst.instance_id, r, g, gate))
 
-    print(f"\ncalibration — {inst.instance_id} ({platform.machine()}, swebench {swebench.__version__})")
-    print(f"{'run':<7}{'applied':<9}{'F2P pass':<10}{'F2P fail':<10}{'P2P pass':<10}{'P2P fail':<10}{'resolved':<10}{'wall'}")
-    for name, s in (("red", red), ("green", green)):
-        print(f"{name:<7}{str(s['applied']):<9}{s['f2p_pass']:<10}{s['f2p_fail']:<10}"
-              f"{s['p2p_pass']:<10}{s['p2p_fail']:<10}{str(s['resolved']):<10}{s['wall_s']}s")
-    if anomalies:
-        print("\nF2P tests that already pass with NO fix applied (mined-label noise):")
-        for t in anomalies:
-            print(f"  - {t}")
+    print(f"\ncalibration [{tag}] — {platform.machine()}, swebench {swebench.__version__}, {wall}s total")
+    print(f"{'instance':<42}{'red':<12}{'green':<12}{'gate':<8}{'f2p noise'}")
+    for iid, r, g, gate in rows:
+        red_s = "error" if "error" in r else ("unresolved" if not r["resolved"] else "RESOLVED!")
+        green_s = "error" if "error" in g else ("resolved" if g["resolved"] else "UNRESOLVED")
+        print(f"{iid:<42}{red_s:<12}{green_s:<12}{gate:<8}{len(noise.get(iid, []))}")
+    if noise:
+        print("\nF2P tests passing with NO fix applied (mined-label noise):")
+        for iid, tests in noise.items():
+            for t in tests:
+                print(f"  {iid}: {t}")
 
-    # Machine-readable summary so the README can cite calibration verbatim.
-    out = CALIB_DIR / f"{inst.instance_id}.json"
+    out = CALIB_DIR / f"calibration-{tag}.json"
     out.write_text(json.dumps({
-        "instance_id": inst.instance_id,
-        "machine": platform.machine(),
+        "tag": tag, "machine": platform.machine(),
         "swebench_version": swebench.__version__,
-        "namespace": args.namespace,
-        "red": red,
-        "green": green,
-        "f2p_anomalies_in_red": anomalies,
-        "gate": {"red": gate_red, "green": gate_green},
+        "namespace": args.namespace, "workers": workers, "wall_s": wall,
+        "red": red, "green": green,
+        "f2p_noise": noise, "failures": failures,
     }, indent=2))
-    print(f"\nsummary -> {out.relative_to(Path.cwd()) if out.is_relative_to(Path.cwd()) else out}")
-
-    print(f"\ngate: {'PASS' if gate_red and gate_green else 'FAIL'} "
-          f"(red={'ok' if gate_red else 'FAIL'}, green={'ok' if gate_green else 'FAIL'})")
-    return 0 if (gate_red and gate_green) else 1
+    print(f"\nsummary -> {out}")
+    print(f"gate: {'PASS' if not failures else f'FAIL ({len(failures)}/{len(ids)} instances)'}")
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":
