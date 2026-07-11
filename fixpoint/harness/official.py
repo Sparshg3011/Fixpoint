@@ -114,7 +114,6 @@ def run_official_eval(
         "--max_workers", str(max_workers),
         "--timeout", str(timeout_s),
         "--namespace", namespace,
-        # Roll-up <model>.<run_id>.json files go here instead of littering CWD.
         "--report_dir", str(CALIB_DIR),
         # Keep instance images between the red and green runs — the default
         # ("env") deletes them after each run, which would force a rebuild/pull
@@ -126,6 +125,12 @@ def run_official_eval(
         # check=True: a harness crash must halt calibration loudly, not let us
         # read a stale report from a previous run and call it a result.
         subprocess.run(cmd, cwd=REPO_ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
+    # swebench 4.1.0 accepts --report_dir but still writes its roll-up report
+    # (<model>.<run_id>.json) to CWD. Relocate so machine-generated evidence
+    # never litters the repo root; if a future version honors the flag, the
+    # glob matches nothing and this is a no-op.
+    for rollup in REPO_ROOT.glob(f"*.{run_id}.json"):
+        rollup.replace(CALIB_DIR / rollup.name)
 
 
 def read_instance_report(run_id: str, model_name: str, instance_id: str) -> dict:
