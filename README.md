@@ -7,10 +7,13 @@ failures until they go green — then opens a PR. Benchmarked blind on
 
 ## Headline result
 
-> **Pending.** Step-1 calibration (empty patch → red, gold patch → green
-> through the official Docker harness) runs first; the resolve rate lands in
-> step 5. This section will always lead with the number and how to reproduce
-> it — dataset fingerprint `b4200a5b…015a`, model version, config hash.
+> **Resolve rate: pending (step 5).** Harness calibrated first: on a 25-instance
+> deterministic subset spanning all 12 repos, 24/25 grade red with an empty
+> patch and green with the gold patch through the official Docker harness
+> (Apple Silicon, emulated x86 images). The 25th — psf__requests-2674 — grades
+> RESOLVED for a *no-op patch* because its mined FAIL_TO_PASS tests hit live
+> network endpoints; documented in [docs/CALIBRATION.md](docs/CALIBRATION.md),
+> kept in the denominator. Dataset fingerprint `b4200a5b…015a`.
 
 ## Why this is hard
 
