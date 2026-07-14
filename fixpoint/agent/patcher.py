@@ -17,28 +17,37 @@ from dataclasses import dataclass
 from fixpoint.agent.edits import Edit, parse_edits, synthesize_diff
 from fixpoint.agent.llm import DEFAULT_MODEL, LLMResult, call
 
-SYSTEM = """You are an expert software engineer fixing a bug in a large codebase.
+SYSTEM = r"""You are an expert software engineer fixing a bug in a large codebase.
 You are given a GitHub issue and the full text of the few files most likely to
 contain the bug. Find the root cause and fix it with the smallest correct change.
 
-Output ONLY edit blocks in exactly this format, one per change:
+Output ONLY edit blocks. Each block is exactly five parts, in order:
+1. a line containing only the file path, written plainly (no XML tags, no
+   angle brackets, no backticks, no quotes) — for example:
+       django/contrib/auth/validators.py
+2. a line containing only: <<<<<<< SEARCH
+3. the exact original lines, copied verbatim from the file above
+4. a line containing only: =======
+5. the replacement lines, then a line containing only: >>>>>>> REPLACE
 
-<path>
+Concrete example of one complete block:
+
+django/contrib/auth/validators.py
 <<<<<<< SEARCH
-<exact lines copied verbatim from the file, including indentation>
+    regex = r'^[\w.@+-]+$'
 =======
-<the replacement lines>
+    regex = r'^[\w.@+-]+\Z'
 >>>>>>> REPLACE
 
 Hard rules:
-- The SEARCH text must be copied EXACTLY from the file shown — same
-  indentation, same whitespace — so it can be found. Include enough lines to be
-  unique (usually 3-8).
+- Write the file path exactly as shown in the "## <path>" heading above the
+  file — the bare path and nothing else on that line.
+- Copy the SEARCH text EXACTLY from the file — same indentation, same
+  whitespace — so it can be located. Include enough lines to be unique (3-8).
 - Only edit files that were shown to you. Never edit tests.
-- Prefer the minimal change that fixes the root cause. Do not reformat
+- Prefer the minimal change that fixes the root cause. Don't reformat
   unrelated code.
-- Output no prose, no explanation, no code fences around the blocks — only the
-  edit blocks themselves."""
+- Output nothing but the edit blocks: no prose, no explanation, no code fences."""
 
 
 @dataclass(frozen=True)

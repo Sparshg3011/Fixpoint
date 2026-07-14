@@ -61,14 +61,27 @@ class EditApplyError(Exception):
     for the replan loop to tell the model exactly what went wrong."""
 
 
+# Models sometimes echo a <path>...</path> wrapper (especially if the prompt
+# ever used <path> as a placeholder). Strip it defensively so the parser is
+# robust regardless of prompt wording.
+_PATH_TAG_RE = re.compile(r"</?\s*path\s*>", re.IGNORECASE)
+
+
+def _clean_path(raw: str) -> str:
+    """Reduce the path line to a bare repo-relative path."""
+    p = _PATH_TAG_RE.sub("", raw)   # drop <path> / </path>
+    p = p.strip().strip("`").strip()  # drop code-fence backticks
+    p = p.strip('"').strip("'").strip()  # drop stray quotes
+    return p
+
+
 def parse_edits(text: str) -> list[Edit]:
     """Pull every SEARCH/REPLACE block out of a model response."""
     edits: list[Edit] = []
     for m in _BLOCK_RE.finditer(text):
-        # The path line often arrives fenced in backticks or prefixed with the
-        # repo name; strip the decoration the model tends to add.
-        path = m.group("path").strip().strip("`").strip()
-        edits.append(Edit(path=path, search=m.group("search"), replace=m.group("replace")))
+        path = _clean_path(m.group("path"))
+        if path:  # skip a block whose path line was pure decoration
+            edits.append(Edit(path=path, search=m.group("search"), replace=m.group("replace")))
     return edits
 
 
