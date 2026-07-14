@@ -61,8 +61,43 @@ across dozens of weak prose-term matches.
    dense embeddings are for (deferred to the hybrid step, adopted only if the
    miss analysis says it pays).
 
-## Numbers
+## Numbers (n=25 subset, 2026-07-14)
 
-Recall@k on n=25 lands in `data/retrieval/{mention,bm25}-n25.json` (gitignored;
-regenerate with `python scripts/eval_retrieval.py --retriever bm25 --n 25`).
-The README's retrieval line cites those files.
+| retriever | recall@1 | recall@5 | recall@10 |
+|---|---|---|---|
+| mention (baseline) | 4% | 12% | 12% |
+| BM25 | 20% | 64% | 72% |
+
+The baseline's 12% is the free-localization rate: only ~1 in 8 Lite issues
+names the gold file in a form pure string-matching catches. BM25's 64%@5 is a
+5x lift — retrieval genuinely earns its place, which the low baseline is what
+proves.
+
+## Miss taxonomy (why BM25 misses 7 of 25 at k=10)
+
+**Sibling / namesake confusion** — BM25 finds the right *area*, wrong file:
+- django-15388: gold `template/autoreload.py`, BM25 #1 `utils/autoreload.py`
+  (two files, same name; the bigger, more-referenced one wins).
+- matplotlib-24149: gold `axes/_axes.py`, BM25 top has `axes/_base.py`.
+- pylint-7114: gold `lint/expand_modules.py`, BM25 returns other `lint/*`.
+Fusion won't fix these — they need within-file (chunk-level) signal or an LLM
+disambiguating among siblings.
+
+**Symptom vocabulary ≠ mechanism vocabulary** — the gold file shares no terms
+with the issue's symptom language:
+- pytest-6116: gold `_pytest/main.py` (generic name), missed even in an
+  82-file corpus.
+- sympy-21379: gold `core/mod.py`; the bug surfaces far from where Mod lives.
+- django-17087: gold `db/migrations/serializer.py`.
+This is the case FOR dense embeddings — but note embeddings do nothing for the
+sibling problem above.
+
+## Complementarity: the argument for fusion, in the data
+
+django-16046 (gold `utils/numberformat.py`): the issue names the file, so the
+mention baseline hits it at **rank 1**, but BM25 whiffs entirely (its top is
+`docs/conf.py`, `admin/options.py` — long files winning on prose breadth).
+A trivial "mention OR BM25@5" fusion recovers this one instance for free,
+lifting recall@5 from 64% to 68%. RRF is the principled version; the point is
+that the two signals miss *different* instances, which is exactly when fusion
+pays.

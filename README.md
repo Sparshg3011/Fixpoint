@@ -18,7 +18,9 @@ failures until they go green — then opens a PR. Benchmarked blind on
 ## Why this is hard
 
 1. **Localization** — the right ~5 files out of thousands, from prose alone.
-   Measured as recall@k against gold-touched files.
+   Measured as recall@k against gold-touched files. On the n=25 subset,
+   from-scratch BM25 hits **recall@5 = 64%** (recall@10 = 72%) versus a 12%
+   "issue names the file" baseline — see [docs/RETRIEVAL.md](docs/RETRIEVAL.md).
 2. **Test-driven replanning** — turning a stack trace into a *better* next
    patch under a bounded budget, not a random retry.
 3. **Verification you can trust** — the agent never sees the gold patch or
