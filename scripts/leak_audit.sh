@@ -21,7 +21,8 @@ if [ ${#targets[@]} -eq 0 ]; then
 fi
 
 pattern='gold_patch|test_patch|fail_to_pass|pass_to_pass|FAIL_TO_PASS|PASS_TO_PASS|hints_text'
-if grep -rnE "$pattern" "${targets[@]}"; then
+# --include='*.py': scan source only, never compiled .pyc (which embed docstrings).
+if grep -rnE --include='*.py' "$pattern" "${targets[@]}"; then
   echo "leak-audit: FAIL — grading-side fields referenced in agent-side code (hits above)"
   exit 1
 fi

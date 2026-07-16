@@ -58,19 +58,30 @@ class PatchResult:
     error: str | None  # set if edits couldn't be located; drives the replan loop
 
 
-def _build_user_prompt(problem_statement: str, files: dict[str, str]) -> str:
+def _build_user_prompt(problem_statement: str, files: dict[str, str], feedback: str | None = None) -> str:
     parts = [f"# GitHub issue\n\n{problem_statement.strip()}\n", "# Candidate files\n"]
     for path, content in files.items():
         # Fence each file with its path so the model can address edits by path.
         parts.append(f"\n## {path}\n```python\n{content}\n```\n")
-    parts.append("\nProduce the edit blocks that fix the issue.")
+    if feedback:
+        # Replan turn: the previous attempt and why it failed. Conditioning the
+        # next patch on the concrete failure is what makes this search, not
+        # blind retry — the whole point of the loop.
+        parts.append(f"\n# Your previous attempt did not work\n{feedback}\n")
+        parts.append("\nProduce a BETTER set of edit blocks that fixes the issue, "
+                     "taking the failure above into account.")
+    else:
+        parts.append("\nProduce the edit blocks that fix the issue.")
     return "\n".join(parts)
 
 
-def generate_patch(problem_statement: str, files: dict[str, str], *, model: str = DEFAULT_MODEL) -> PatchResult:
+def generate_patch(problem_statement: str, files: dict[str, str], *,
+                   model: str = DEFAULT_MODEL, feedback: str | None = None) -> PatchResult:
     """One LLM round-trip; parse and synthesize. Never raises on a bad patch —
-    it returns error text so the caller (the loop) can react."""
-    result = call(SYSTEM, _build_user_prompt(problem_statement, files), model=model)
+    it returns error text so the caller (the loop) can react. Pass `feedback`
+    (prior attempt + failure output) to run a replan turn instead of a fresh
+    attempt."""
+    result = call(SYSTEM, _build_user_prompt(problem_statement, files, feedback), model=model)
     edits = parse_edits(result.text)
     if not edits:
         return PatchResult(diff="", edits=[], llm=result, error="model produced no edit blocks")
