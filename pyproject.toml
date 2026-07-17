@@ -14,6 +14,10 @@ dependencies = [
     # The official grading harness. Pinned hard: its eval semantics ARE the
     # headline metric, and a silent upgrade could change what "resolved" means.
     "swebench==4.1.0",
+    # Anthropic SDK for the patcher and reproducer model calls. Floor only —
+    # the Messages API surface we use (messages.create, content blocks, usage
+    # token counts) has been stable across SDK releases.
+    "anthropic>=0.40",
 ]
 
 [tool.setuptools.packages.find]

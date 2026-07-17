@@ -73,20 +73,32 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     traj: list[Step] = []
     cost = 0.0
 
-    # 1. Write a reproducer and confirm it actually captures the bug: it must be
-    #    RED with no fix applied. A reproducer that's already green (or errors)
-    #    is a broken compass — we note it and proceed with weak confidence
-    #    rather than trusting a green that means nothing.
+    # 1. Write a reproducer and confirm it actually captures the bug: with no
+    #    fix applied it must exit non-zero for a real, captured reason. exit 0
+    #    means it doesn't detect the bug; exit -1 means the run itself failed.
+    #    Either way its "green" would be meaningless, so we don't trust it.
     script, rl = generate_reproducer(problem_statement, files, model=model)
     cost += rl.cost_usd
     base_check = run_reproducer(image, base_commit, patch="", script=script)
-    reproducer_valid = base_check.applied and not base_check.green
+    reproducer_valid = base_check.applied and base_check.exit_code > 0
     traj.append(Step("reproducer",
                      f"red-on-base={reproducer_valid} (exit {base_check.exit_code})",
                      green=not reproducer_valid))
 
-    # 2. Bounded attempt loop. Attempt 1 is fresh; later attempts replan from
-    #    the previous reproducer failure.
+    # 2a. Broken compass: the reproducer can't tell a fix from nothing, so its
+    #     green is not evidence. Produce one best-effort patch and report it
+    #     UNVERIFIED — never claim green off a reproducer that didn't go red.
+    if not reproducer_valid:
+        patch = generate_patch(problem_statement, files, model=model)
+        cost += patch.llm.cost_usd
+        traj.append(Step("attempt", "#1: reproducer not trustworthy — best-effort patch, unverified",
+                         green=None))
+        traj.append(Step("result", "green=False (no trustworthy reproducer signal)", green=False))
+        return SolveResult(diff=patch.diff, green=False, attempts=1, cost_usd=round(cost, 6),
+                           trajectory=traj, reproducer_valid=False)
+
+    # 2b. Bounded attempt loop (reproducer is trustworthy here). Attempt 1 is
+    #     fresh; later attempts replan from the previous reproducer failure.
     best_diff = ""
     feedback: str | None = None
     green = False
@@ -104,7 +116,7 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
         traj.append(Step("attempt",
                          f"#{attempt}: applied={repro.applied} reproducer_exit={repro.exit_code}",
                          green=repro.green))
-        if repro.green:
+        if repro.green:  # trustworthy: the reproducer went red on base
             green = True
             break
         feedback = _feedback(patch.diff, repro)

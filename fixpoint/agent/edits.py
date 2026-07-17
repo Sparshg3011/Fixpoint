@@ -137,7 +137,10 @@ def _apply_one(content: str, edit: Edit) -> str:
             else:
                 adjusted.append(ln[min(-delta, _indent_len(ln)):])  # remove extra indent
         new_block = "\n".join(adjusted)
-        if edit.replace.endswith("\n") or after:
+        # Add a trailing newline if the replacement text carries one, if there
+        # is content after the match, or if the last replaced FILE line ended in
+        # one — so editing a file's final line doesn't strip its final newline.
+        if edit.replace.endswith("\n") or after or file_lines[i + n - 1].endswith("\n"):
             new_block += "\n"
         return before + new_block + after
 

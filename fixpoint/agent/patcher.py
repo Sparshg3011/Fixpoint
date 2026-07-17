@@ -40,8 +40,8 @@ django/contrib/auth/validators.py
 >>>>>>> REPLACE
 
 Hard rules:
-- Write the file path exactly as shown in the "## <path>" heading above the
-  file — the bare path and nothing else on that line.
+- Write the file path exactly as shown in the "## " heading above each file —
+  the bare path and nothing else on that line.
 - Copy the SEARCH text EXACTLY from the file — same indentation, same
   whitespace — so it can be located. Include enough lines to be unique (3-8).
 - Only edit files that were shown to you. Never edit tests.

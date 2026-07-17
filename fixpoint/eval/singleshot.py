@@ -11,6 +11,7 @@ retrieval, patching, and sanitizing meet for the first time.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -22,12 +23,12 @@ from fixpoint.eval.recall import first_hit_rank, gold_files
 from fixpoint.retrieval import load_corpus, tree_at
 from fixpoint.retrieval.bm25 import BM25Searcher
 
-_DIFF_PATH_RE = None  # lazy; see _touched_paths
+# The `diff --git a/<path> b/<path>` header line names each file the diff edits.
+_DIFF_GIT_RE = re.compile(r"^diff --git a/(\S+) b/\S+$", re.MULTILINE)
 
 
 def _touched_paths(diff: str) -> list[str]:
-    import re
-    return re.findall(r"^diff --git a/(\S+) b/\S+$", diff, re.MULTILINE)
+    return _DIFF_GIT_RE.findall(diff)
 
 
 def git_apply_check(tree: Path, diff: str) -> bool:

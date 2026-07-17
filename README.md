@@ -47,8 +47,15 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 ## Repo map
 
 ```
-fixpoint/bench/     dataset access + agent-visibility firewall
-fixpoint/harness/   official SWE-bench evaluation, wrapped
-scripts/            step runners (explore, calibrate, leak audit)
-docs/               PLAN.md (locked scope), UI_VISION.md (avatars, run diary)
+fixpoint/bench/       dataset access + agent-visibility firewall
+fixpoint/retrieval/   BM25 + mention retrieval, checkout cache, corpus walker
+fixpoint/agent/       patcher, SEARCH/REPLACE diff synthesizer, reproducer, replan loop
+fixpoint/harness/     official SWE-bench eval + the reproducer sandbox
+fixpoint/eval/        deterministic subset, recall@k, single-shot pipeline
+scripts/              step runners + offline calibrations (verify_sanitizer, verify_reproducer, ...)
+docs/                 PLAN, RETRIEVAL, PATCHING, REPLAN, CALIBRATION, UI_VISION
 ```
+
+Every offline engine has a credit-free calibration you can reproduce:
+`scripts/verify_sanitizer.py` (diff applies == gold), `scripts/verify_reproducer.py`
+(reproducer red-on-base / green-on-gold), `scripts/calibrate.py` (harness red/green).

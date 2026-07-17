@@ -47,7 +47,10 @@ if [ -s /tmp/fixpoint_patch.diff ]; then
 fi
 printf '%s' "$FIXPOINT_SCRIPT_B64" | base64 -d > /tmp/fixpoint_reproducer.py
 source /opt/miniconda3/bin/activate
-conda activate {env_name}
+# swebench standardizes on the `testbed` env; fall back to the first non-base
+# env so a repo that names it differently doesn't silently run base python
+# (which would import-error and be misread as "the bug is present").
+conda activate {env_name} 2>/dev/null || conda activate "$(conda env list | awk 'NR>2 && $1!="base" && $1!="" {{print $1; exit}}')"
 timeout {timeout} python /tmp/fixpoint_reproducer.py
 echo "{exit_marker}$?"
 """
