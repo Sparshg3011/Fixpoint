@@ -22,9 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from swebench.harness.test_spec.test_spec import make_test_spec
-
 from fixpoint.bench import get, load_lite
+from fixpoint.eval.images import image_key
 from fixpoint.harness.sandbox import run_reproducer
 
 # A reproducer written the way the agent will write one: assert the FIXED
@@ -55,19 +54,10 @@ sys.exit(0 if fixed else 1)
 """
 
 
-def image_for(instance_id: str) -> tuple[str, str]:
-    inst = get(load_lite(), instance_id)
-    d = {"instance_id": inst.instance_id, "repo": inst.repo, "base_commit": inst.base_commit,
-         "patch": "", "test_patch": "", "problem_statement": "", "hints_text": "",
-         "created_at": inst.created_at, "version": inst.version,
-         "FAIL_TO_PASS": "[]", "PASS_TO_PASS": "[]",
-         "environment_setup_commit": inst.environment_setup_commit}
-    return make_test_spec(d, namespace="swebench").instance_image_key, inst.base_commit
-
-
 def main() -> int:
     iid = "django__django-11099"
-    image, base = image_for(iid)
+    inst = get(load_lite(), iid)
+    image, base = image_key(inst), inst.base_commit
     gold = (Path(__file__).resolve().parent.parent / "data" / "step0" / iid / "gold_patch.diff").read_text()
 
     print(f"reproducer calibration — {iid}\n  image: {image}\n")
