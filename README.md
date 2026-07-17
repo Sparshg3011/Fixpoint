@@ -59,3 +59,13 @@ docs/                 PLAN, RETRIEVAL, PATCHING, REPLAN, CALIBRATION, UI_VISION
 Every offline engine has a credit-free calibration you can reproduce:
 `scripts/verify_sanitizer.py` (diff applies == gold), `scripts/verify_reproducer.py`
 (reproducer red-on-base / green-on-gold), `scripts/calibrate.py` (harness red/green).
+
+```bash
+.venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest   # hermetic suite
+```
+
+The suite needs no network, Docker, or API key. It pins the integrity
+properties directly: the `AgentView` firewall exposes only four fields, the
+replan loop never reports green off a reproducer that didn't go red on base,
+subset selection and BM25 tie-breaks are deterministic, and a malformed edit
+fails loudly instead of corrupting a file.

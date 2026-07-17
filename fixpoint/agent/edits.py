@@ -109,6 +109,14 @@ def _apply_one(content: str, edit: Edit) -> str:
     alignment) would push back, and where the resolve rate says whether it's
     worth the added false-match risk.
     """
+    # Reject an empty/whitespace-only SEARCH before anything else: "" is a
+    # substring of every string, so the exact-match path below would "match"
+    # instantly and content.replace("", ...) would silently prepend the
+    # replacement to the top of the file. A malformed block must fail loudly,
+    # never corrupt the file.
+    if not edit.search.strip():
+        raise EditApplyError(f"empty SEARCH block for {edit.path!r}")
+
     if edit.search in content:
         return content.replace(edit.search, edit.replace, 1)
 
@@ -116,8 +124,6 @@ def _apply_one(content: str, edit: Edit) -> str:
     search_lines = edit.search.splitlines()
     norm = [ln.strip() for ln in search_lines]
     n = len(norm)
-    if n == 0:
-        raise EditApplyError(f"empty SEARCH block for {edit.path!r}")
 
     for i in range(len(file_lines) - n + 1):
         window = [file_lines[j].strip() for j in range(i, i + n)]

@@ -20,5 +20,12 @@ dependencies = [
     "anthropic>=0.40",
 ]
 
+[project.optional-dependencies]
+# pip install -e ".[dev]" — the hermetic test suite (no network, Docker, or API).
+dev = ["pytest>=8"]
+
 [tool.setuptools.packages.find]
 include = ["fixpoint*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
