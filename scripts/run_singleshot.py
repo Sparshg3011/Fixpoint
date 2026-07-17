@@ -98,7 +98,7 @@ def main() -> int:
     }, indent=2))
     print(f"\npredictions -> {OUT_DIR / 'predictions.jsonl'}")
     print(f"results     -> {OUT_DIR / 'results.json'}")
-    print(f"\nnext: grade single-shot resolve rate with the official harness:")
+    print("\nnext: grade single-shot resolve rate with the official harness:")
     print(f"  python scripts/grade_predictions.py --predictions {OUT_DIR / 'predictions.jsonl'} --n {args.n}")
     return 0
 

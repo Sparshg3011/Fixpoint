@@ -1,0 +1,33 @@
+name: ci
+
+# Runs the hermetic checks on every push and PR. Nothing here needs network,
+# Docker, or an API key — the test suite uses fakes, so CI stays fast and
+# deterministic. The Docker-backed calibrations (verify_sanitizer /
+# verify_reproducer) are run locally, not in CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]" ruff
+
+      - name: Lint
+        run: ruff check fixpoint scripts tests
+
+      - name: Firewall leak audit
+        run: ./scripts/leak_audit.sh
+
+      - name: Tests
+        run: pytest -q

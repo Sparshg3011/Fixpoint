@@ -1,5 +1,7 @@
 # Fixpoint
 
+[![ci](https://github.com/Sparshg3011/Fixpoint/actions/workflows/ci.yml/badge.svg)](https://github.com/Sparshg3011/Fixpoint/actions/workflows/ci.yml)
+
 An agent that takes a GitHub issue and a repo, finds the code that matters,
 writes a patch, runs the repo's own tests in a sandbox, and replans from the
 failures until they go green — then opens a PR. Benchmarked blind on
