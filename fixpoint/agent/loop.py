@@ -89,7 +89,7 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     #     green is not evidence. Produce one best-effort patch and report it
     #     UNVERIFIED — never claim green off a reproducer that didn't go red.
     if not reproducer_valid:
-        patch = generate_patch(problem_statement, files, model=model)
+        patch = generate_patch(problem_statement, files, model=model, cache=True)
         cost += patch.llm.cost_usd
         traj.append(Step("attempt", "#1: reproducer not trustworthy — best-effort patch, unverified",
                          green=None))
@@ -104,7 +104,9 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     green = False
     attempt = 0
     for attempt in range(1, max_attempts + 1):
-        patch = generate_patch(problem_statement, files, model=model, feedback=feedback)
+        # cache=True: attempts 2+ re-read the identical issue+files prefix at
+        # 0.1x instead of full price — the loop's main cost lever.
+        patch = generate_patch(problem_statement, files, model=model, feedback=feedback, cache=True)
         cost += patch.llm.cost_usd
         if not patch.diff:
             traj.append(Step("attempt", f"#{attempt}: no usable patch — {patch.error}", green=False))

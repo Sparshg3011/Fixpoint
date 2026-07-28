@@ -109,3 +109,19 @@ def test_edit_targeting_unknown_file_raises():
 def test_empty_search_raises():
     with pytest.raises(EditApplyError):
         synthesize_diff({FILE: CONTENT}, [Edit(FILE, "", "x")])
+
+
+# --- cost accounting with prompt caching ------------------------------------
+
+def test_cached_reads_are_a_tenth_of_input_price():
+    from fixpoint.agent.llm import _cost
+    full = _cost("claude-sonnet-5", 1_000_000, 0)
+    cached = _cost("claude-sonnet-5", 0, 0, cache_read_tokens=1_000_000)
+    assert cached == pytest.approx(full * 0.10)
+
+
+def test_cache_writes_carry_the_25_percent_premium():
+    from fixpoint.agent.llm import _cost
+    full = _cost("claude-sonnet-5", 1_000_000, 0)
+    written = _cost("claude-sonnet-5", 0, 0, cache_write_tokens=1_000_000)
+    assert written == pytest.approx(full * 1.25)

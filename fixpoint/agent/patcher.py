@@ -58,30 +58,48 @@ class PatchResult:
     error: str | None  # set if edits couldn't be located; drives the replan loop
 
 
-def _build_user_prompt(problem_statement: str, files: dict[str, str], feedback: str | None = None) -> str:
+def _stable_prompt(problem_statement: str, files: dict[str, str]) -> str:
+    """The big, unchanging head of the user turn: the issue and the files.
+
+    Identical on every attempt for a given instance, so it is exactly what the
+    prompt cache should hold. Keep it byte-stable — any change anywhere in this
+    text invalidates the cache for the whole prefix.
+    """
     parts = [f"# GitHub issue\n\n{problem_statement.strip()}\n", "# Candidate files\n"]
     for path, content in files.items():
         # Fence each file with its path so the model can address edits by path.
         parts.append(f"\n## {path}\n```python\n{content}\n```\n")
+    return "\n".join(parts)
+
+
+def _volatile_prompt(feedback: str | None) -> str:
+    """The short, per-attempt tail. Must come AFTER the cached prefix."""
     if feedback:
         # Replan turn: the previous attempt and why it failed. Conditioning the
         # next patch on the concrete failure is what makes this search, not
         # blind retry — the whole point of the loop.
-        parts.append(f"\n# Your previous attempt did not work\n{feedback}\n")
-        parts.append("\nProduce a BETTER set of edit blocks that fixes the issue, "
-                     "taking the failure above into account.")
-    else:
-        parts.append("\nProduce the edit blocks that fix the issue.")
-    return "\n".join(parts)
+        return (f"\n# Your previous attempt did not work\n{feedback}\n"
+                "\nProduce a BETTER set of edit blocks that fixes the issue, "
+                "taking the failure above into account.")
+    return "\nProduce the edit blocks that fix the issue."
 
 
 def generate_patch(problem_statement: str, files: dict[str, str], *,
-                   model: str = DEFAULT_MODEL, feedback: str | None = None) -> PatchResult:
+                   model: str = DEFAULT_MODEL, feedback: str | None = None,
+                   cache: bool = False) -> PatchResult:
     """One LLM round-trip; parse and synthesize. Never raises on a bad patch —
-    it returns error text so the caller (the loop) can react. Pass `feedback`
-    (prior attempt + failure output) to run a replan turn instead of a fresh
-    attempt."""
-    result = call(SYSTEM, _build_user_prompt(problem_statement, files, feedback), model=model)
+    it returns error text so the caller (the loop) can react.
+
+    `feedback` (prior attempt + failure output) makes this a replan turn rather
+    than a fresh attempt. `cache` puts the issue+files prefix in the prompt
+    cache — set it when the same prefix will be sent again (the replan loop),
+    not for a one-shot call, which would pay the 1.25x write for no read.
+    """
+    stable, volatile = _stable_prompt(problem_statement, files), _volatile_prompt(feedback)
+    if cache:
+        result = call(SYSTEM, volatile, model=model, cache_prefix=stable)
+    else:
+        result = call(SYSTEM, stable + volatile, model=model)
     edits = parse_edits(result.text)
     if not edits:
         return PatchResult(diff="", edits=[], llm=result, error="model produced no edit blocks")

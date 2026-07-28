@@ -23,13 +23,14 @@ def _llm(cost=0.001):
 @pytest.fixture
 def fakes(monkeypatch):
     """Wire fake reproducer/patcher/sandbox into the loop and record calls."""
-    calls = {"patch_feedback": [], "repro_patches": []}
+    calls = {"patch_feedback": [], "repro_patches": [], "patch_cache": []}
 
     def fake_reproducer(problem_statement, files, *, model=None):
         return "print('repro')\n", _llm()
 
-    def fake_patch(problem_statement, files, *, model=None, feedback=None):
+    def fake_patch(problem_statement, files, *, model=None, feedback=None, cache=False):
         calls["patch_feedback"].append(feedback)
+        calls["patch_cache"].append(cache)
         return PatchResult(diff=DIFF, edits=[], llm=_llm(), error=None)
 
     monkeypatch.setattr(loop_mod, "generate_reproducer", fake_reproducer)
@@ -108,3 +109,11 @@ def test_base_check_runs_with_no_patch(monkeypatch, fakes):
     wire_sandbox(monkeypatch, base_exit=1, patched_exit=0, calls=fakes)
     solve()
     assert fakes["repro_patches"][0] == "", "first sandbox run must apply no patch"
+
+
+def test_loop_uses_prompt_cache_on_every_attempt(monkeypatch, fakes):
+    """The loop re-sends an identical issue+files prefix each attempt; caching
+    it turns attempts 2+ into 0.1x reads. Without this the loop costs ~2x."""
+    wire_sandbox(monkeypatch, base_exit=1, patched_exit=1, calls=fakes)
+    solve()
+    assert fakes["patch_cache"] == [True, True, True]
