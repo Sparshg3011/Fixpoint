@@ -9,13 +9,23 @@ failures until they go green — then opens a PR. Benchmarked blind on
 
 ## Headline result
 
-> **Resolve rate: pending (step 5).** Harness calibrated first: on a 25-instance
-> deterministic subset spanning all 12 repos, 24/25 grade red with an empty
-> patch and green with the gold patch through the official Docker harness
-> (Apple Silicon, emulated x86 images). The 25th — psf__requests-2674 — grades
-> RESOLVED for a *no-op patch* because its mined FAIL_TO_PASS tests hit live
-> network endpoints; documented in [docs/CALIBRATION.md](docs/CALIBRATION.md),
-> kept in the denominator. Dataset fingerprint `b4200a5b…015a`.
+> **9/25 = 36% resolved** — single-shot, Claude Sonnet 5, on a deterministic
+> 25-instance subset of SWE-bench-Lite spanning all 12 repos, graded by the
+> unmodified official Docker harness. 95% CI [20%, 55%] — n=25 is small, so
+> treat this as a subset estimate, not the Lite-300 figure (that run is next).
+> Cost $7.21 (~$0.29/instance), 246s to generate + 923s to grade.
+>
+> Reproduce: `python scripts/run_singleshot.py --n 25` then
+> `python scripts/grade_predictions.py --predictions data/singleshot/predictions.jsonl --n 25`.
+> Dataset fingerprint `b4200a5b…015a`.
+>
+> Supporting numbers: patch **apply rate 94%** given retrieval found the right
+> file (15/16); retrieval **recall@5 = 64%**; **56%** of applying patches
+> resolved. The harness itself is calibrated — 24/25 instances grade red with
+> an empty patch and green with the gold patch; the 25th
+> (psf__requests-2674) is network-flaky and is documented in
+> [docs/CALIBRATION.md](docs/CALIBRATION.md), kept in the denominator, and did
+> **not** resolve here, so it is not inflating the number.
 
 ## Why this is hard
 
