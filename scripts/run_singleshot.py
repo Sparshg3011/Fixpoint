@@ -28,7 +28,18 @@ from fixpoint.bench import load_lite
 from fixpoint.eval import lite_subset
 from fixpoint.eval.singleshot import run_single
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "singleshot"
+BASE_OUT = Path(__file__).resolve().parent.parent / "data" / "singleshot"
+
+
+def out_dir(model: str) -> Path:
+    """Per-model output directory.
+
+    Runs are namespaced by model because comparing backends is the point —
+    a flat directory means the second run silently destroys the first one's
+    patches and results (learned the hard way).
+    """
+    return BASE_OUT / model.replace("/", "_").replace(":", "_")
+
 
 
 def main() -> int:
@@ -78,6 +89,7 @@ def main() -> int:
         gold_mark = "yes" if (r.gold_retrieved_rank and r.gold_retrieved_rank <= args.k) else "MISS"
         print(f"  {inst.instance_id:<40}{('yes' if r.applied else 'NO'):<9}{gold_mark:<8}{r.error or ''}")
 
+    OUT_DIR = out_dir(args.model)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     # predictions.jsonl for the official harness (single-shot resolve rate).
     model_tag = f"fixpoint-singleshot-{args.model}"

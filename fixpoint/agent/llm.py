@@ -11,18 +11,36 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+# Which API to talk to. "anthropic" (default) keeps the published Sonnet 5
+# result reproducible; "openai" targets ANY OpenAI-compatible endpoint —
+# NVIDIA NIM (free), Z.ai/GLM, OpenRouter, DeepSeek, a local Ollama server.
+# One adapter covers all of them because they share /chat/completions.
+BACKEND = os.environ.get("FIXPOINT_BACKEND", "anthropic")
+
+# Base URL for the openai backend, e.g.
+#   NVIDIA NIM  https://integrate.api.nvidia.com/v1
+#   Z.ai (GLM)  https://api.z.ai/api/paas/v4
+#   Ollama      http://localhost:11434/v1
+BASE_URL = os.environ.get("FIXPOINT_BASE_URL", "")
+
 # Default model. Sonnet 5 is the iteration workhorse: near-Opus on coding at
 # ~60% the price, which matters when we sweep 25-300 instances repeatedly.
-# Override per run with FIXPOINT_MODEL (e.g. claude-opus-4-8 for a headline run).
+# Override per run with FIXPOINT_MODEL (claude-opus-4-8 for a headline run, or
+# an open model id when FIXPOINT_BACKEND=openai).
 DEFAULT_MODEL = os.environ.get("FIXPOINT_MODEL", "claude-sonnet-5")
 
-# USD per 1M tokens (input, output), from the pinned model catalog. Used only
-# to attach a dollar figure to each call — the harness bills nothing.
+# USD per 1M tokens (input, output). Used only to attach a dollar figure to each
+# call — the harness bills nothing. Unknown models price at 0.0, which is the
+# correct answer for a free endpoint (NVIDIA NIM) or a local server.
 _PRICING = {
     "claude-fable-5": (10.0, 50.0),
     "claude-opus-4-8": (5.0, 25.0),
     "claude-sonnet-5": (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
+    # Z.ai published rates. NVIDIA NIM's free tier is genuinely $0, so its
+    # models are deliberately absent and price at zero.
+    "glm-4.6": (0.60, 2.20),
+    "glm-4.5-air": (0.20, 1.10),
 }
 
 
@@ -58,6 +76,61 @@ def _cost(model: str, input_tokens: int, output_tokens: int,
     )
 
 
+def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: int,
+                            base_url: str, max_retries: int = 5) -> LLMResult:
+    """One /chat/completions call against any OpenAI-compatible endpoint.
+
+    Uses httpx directly (already present via the anthropic SDK) rather than
+    adding the openai package — the request is a small JSON body and doing it
+    by hand keeps the dependency list honest.
+
+    Free tiers rate-limit aggressively and by current traffic, so 429s and 5xx
+    are retried with exponential backoff rather than failing an entire run.
+    """
+    import time
+
+    import httpx
+
+    # Any of these keys is accepted so a user can name it after their provider.
+    key = next((os.environ[k] for k in
+                ("FIXPOINT_API_KEY", "NVIDIA_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY")
+                if os.environ.get(k)), "")
+    if not base_url:
+        raise RuntimeError("FIXPOINT_BACKEND=openai needs FIXPOINT_BASE_URL set")
+
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+    }
+    headers = {"Content-Type": "application/json"}
+    if key:  # a local Ollama server needs no key
+        headers["Authorization"] = f"Bearer {key}"
+
+    last = ""
+    for attempt in range(max_retries):
+        resp = httpx.post(f"{base_url.rstrip('/')}/chat/completions",
+                          json=payload, headers=headers, timeout=600.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            msg = data["choices"][0]["message"]
+            # Reasoning models may put the answer in content and their chain of
+            # thought elsewhere; we only ever want content.
+            text = msg.get("content") or ""
+            usage = data.get("usage") or {}
+            in_tok = usage.get("prompt_tokens", 0)
+            out_tok = usage.get("completion_tokens", 0)
+            return LLMResult(text=text, input_tokens=in_tok, output_tokens=out_tok,
+                             cost_usd=_cost(model, in_tok, out_tok), model=model)
+        last = f"{resp.status_code}: {resp.text[:200]}"
+        if resp.status_code == 429 or resp.status_code >= 500:
+            time.sleep(min(2 ** attempt, 30))  # backoff, capped
+            continue
+        break  # 4xx other than 429 will not fix itself
+    raise RuntimeError(f"{base_url} call failed after {max_retries} attempts — {last}")
+
+
 def call(system: str, user: str, *, model: str = DEFAULT_MODEL, max_tokens: int = 8000,
          cache_prefix: str | None = None) -> LLMResult:
     """One non-streaming message. Returns the concatenated text and its cost.
@@ -74,6 +147,13 @@ def call(system: str, user: str, *, model: str = DEFAULT_MODEL, max_tokens: int 
     calls or nothing is reused. Only worth passing when the same prefix will be
     sent more than once — a lone call pays the 1.25x write for no read.
     """
+    # Non-Anthropic endpoints have no prompt-cache concept, so the stable
+    # prefix is simply prepended — same prompt, just billed at full rate.
+    if BACKEND == "openai":
+        return _call_openai_compatible(
+            system, (cache_prefix + user) if cache_prefix else user,
+            model=model, max_tokens=max_tokens, base_url=BASE_URL)
+
     import anthropic  # local import: no dependency at module import time
 
     if cache_prefix is None:

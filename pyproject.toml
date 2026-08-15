@@ -34,6 +34,11 @@ testpaths = ["tests"]
 line-length = 110
 
 [tool.ruff.lint]
-# Defaults (E4/E7/E9, F) plus import sorting. Deliberately not enabling line-length
-# (E501) — several explanatory comments run long on purpose.
-extend-select = ["I"]
+# Pinned EXPLICITLY rather than relying on ruff's defaults: CI installs ruff
+# unpinned, and a release that widens the default rule set would otherwise turn
+# a green build red without a line of our code changing.
+#   E4/E7/E9,F  pyflakes + the pycodestyle checks worth enforcing
+#   I           import sorting
+#   UP          pyupgrade — keep syntax current for the target Python
+# E501 (line length) is deliberately off; several explanatory comments run long.
+select = ["E4", "E7", "E9", "F", "I", "UP"]

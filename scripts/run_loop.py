@@ -35,7 +35,18 @@ from fixpoint.eval.recall import first_hit_rank, gold_files
 from fixpoint.retrieval import load_corpus, tree_at
 from fixpoint.retrieval.bm25 import BM25Searcher
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "loop"
+BASE_OUT = Path(__file__).resolve().parent.parent / "data" / "loop"
+
+
+def out_dir(model: str) -> Path:
+    """Per-model output directory.
+
+    Runs are namespaced by model because comparing backends is the point —
+    a flat directory means the second run silently destroys the first one's
+    patches and results (learned the hard way).
+    """
+    return BASE_OUT / model.replace("/", "_").replace(":", "_")
+
 
 
 def run_one(inst: Instance, k: int, attempts: int, model: str) -> dict:
@@ -105,6 +116,7 @@ def main() -> int:
             continue
         print(f"  {inst.instance_id:<40}{str(r['loop_green']):<12}{r['attempts']:<10}{r['reproducer_valid']}")
 
+    OUT_DIR = out_dir(args.model)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     model_tag = f"fixpoint-loop-{args.model}"
     with (OUT_DIR / "predictions.jsonl").open("w") as f:

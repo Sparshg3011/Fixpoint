@@ -14,7 +14,7 @@ so we can price everything else against it.
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 from fixpoint.retrieval.types import Document
 

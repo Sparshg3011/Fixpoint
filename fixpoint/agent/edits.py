@@ -31,8 +31,8 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 # One capturing regex for the whole block. re.DOTALL so SEARCH/REPLACE bodies
 # may span many lines; the path is whatever sits on the line above the fence.

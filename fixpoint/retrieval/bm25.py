@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter, defaultdict
-from typing import Sequence
+from collections.abc import Sequence
 
 from fixpoint.retrieval.types import Document
 

@@ -58,3 +58,38 @@ def test_dry_run_takes_no_outward_action(monkeypatch, tmp_path):
     assert res.dry_run is True
     assert not any(c[0] in {"fork", "push"} for c in calls), f"dry run acted outward: {calls}"
     assert not any(c[0] == "gh" and c[1] and c[1][0] == "pr" for c in calls)
+
+
+# --- backend-aware credential guard -----------------------------------------
+
+def test_require_key_accepts_provider_named_keys_for_openai_backend(monkeypatch):
+    from fixpoint.agent import secrets
+    monkeypatch.setattr(secrets, "load_env", lambda: True)
+    monkeypatch.setenv("FIXPOINT_BACKEND", "openai")
+    monkeypatch.setenv("FIXPOINT_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-x")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    secrets.require_api_key()  # must not raise: anthropic key is irrelevant here
+
+
+def test_require_key_allows_keyless_local_server(monkeypatch):
+    from fixpoint.agent import secrets
+    monkeypatch.setattr(secrets, "load_env", lambda: True)
+    monkeypatch.setenv("FIXPOINT_BACKEND", "openai")
+    monkeypatch.setenv("FIXPOINT_BASE_URL", "http://localhost:11434/v1")
+    for k in ("FIXPOINT_API_KEY", "NVIDIA_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    secrets.require_api_key()  # Ollama needs no key
+
+
+def test_require_key_still_demands_a_key_for_remote_openai_backend(monkeypatch):
+    import pytest as _pytest
+
+    from fixpoint.agent import secrets
+    monkeypatch.setattr(secrets, "load_env", lambda: True)
+    monkeypatch.setenv("FIXPOINT_BACKEND", "openai")
+    monkeypatch.setenv("FIXPOINT_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    for k in ("FIXPOINT_API_KEY", "NVIDIA_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    with _pytest.raises(SystemExit):
+        secrets.require_api_key()

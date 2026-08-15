@@ -13,7 +13,7 @@ top k. On Lite most gold patches touch exactly one file, so this reads as
 from __future__ import annotations
 
 import re
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from fixpoint.bench import Instance, agent_view
 from fixpoint.retrieval import Document, Searcher, load_corpus, tree_at

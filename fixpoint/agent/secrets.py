@@ -31,12 +31,35 @@ def load_env(path: Path | None = None) -> bool:
 
 
 def require_api_key() -> None:
-    """Fail early and clearly if no key is available, before any API call."""
+    """Fail early and clearly if the ACTIVE backend has no credentials.
+
+    Which key is required depends on FIXPOINT_BACKEND: the anthropic path needs
+    ANTHROPIC_API_KEY, while an OpenAI-compatible endpoint accepts any of
+    several provider-named keys — and a local server (Ollama) needs none at
+    all, so an empty key there is legitimate rather than an error.
+    """
     load_env()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    backend = os.environ.get("FIXPOINT_BACKEND", "anthropic")
+
+    if backend == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise SystemExit(
+                "No ANTHROPIC_API_KEY found (FIXPOINT_BACKEND=anthropic).\n"
+                "  Add it to .env (gitignored), or switch backends by setting\n"
+                "  FIXPOINT_BACKEND=openai with FIXPOINT_BASE_URL + FIXPOINT_MODEL.\n"
+                "Never paste a key into a chat or a command — put it only in .env."
+            )
+        return
+
+    if not os.environ.get("FIXPOINT_BASE_URL"):
+        raise SystemExit("FIXPOINT_BACKEND=openai requires FIXPOINT_BASE_URL in .env")
+    # localhost servers (Ollama, vLLM) authenticate nothing; remote ones must.
+    url = os.environ["FIXPOINT_BASE_URL"]
+    is_local = "localhost" in url or "127.0.0.1" in url
+    has_key = any(os.environ.get(k) for k in
+                  ("FIXPOINT_API_KEY", "NVIDIA_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY"))
+    if not has_key and not is_local:
         raise SystemExit(
-            "No ANTHROPIC_API_KEY found.\n"
-            "  Create a .env file (gitignored): cp .env.example .env, then paste your key.\n"
-            "  Or export ANTHROPIC_API_KEY in your shell.\n"
-            "Never paste the key into a chat or a command — put it only in .env."
+            f"No API key found for {url}.\n"
+            "  Set one of FIXPOINT_API_KEY / NVIDIA_API_KEY / ZAI_API_KEY / OPENAI_API_KEY in .env."
         )
