@@ -29,6 +29,7 @@ from fixpoint.agent.llm import DEFAULT_MODEL
 from fixpoint.agent.loop import solve
 from fixpoint.agent.secrets import require_api_key
 from fixpoint.bench import Instance, agent_view, load_lite
+from fixpoint.diary import Diary
 from fixpoint.eval import lite_subset
 from fixpoint.eval.images import image_key
 from fixpoint.eval.recall import first_hit_rank, gold_files
@@ -52,13 +53,17 @@ def out_dir(model: str) -> Path:
 def run_one(inst: Instance, k: int, attempts: int, model: str) -> dict:
     """Retrieve, then run the loop. Returns a JSON-able record."""
     av = agent_view(inst)  # firewall: the loop sees only this + the image string
+    # One diary per run: the UI renders these events live (SSE) and as replay.
+    diary = Diary(run_id=f"{inst.instance_id}-{int(time.time())}", instance_id=inst.instance_id)
+    diary.record("retrieval", "started", query_chars=len(av.problem_statement))
     docs = load_corpus(tree_at(inst.repo, inst.base_commit))
     by_path = {d.path: d.text for d in docs}
     ranked = [p for p, _ in BM25Searcher(docs).search(av.problem_statement, k=k)]
     files = {p: by_path[p] for p in ranked}
+    diary.record("retrieval", "succeeded", files=ranked, corpus_size=len(docs))
 
     result = solve(av.problem_statement, files, image_key(inst), inst.base_commit,
-                   max_attempts=attempts, model=model)
+                   max_attempts=attempts, model=model, diary=diary)
     gold = list(gold_files(inst))
     return {
         "instance_id": inst.instance_id,

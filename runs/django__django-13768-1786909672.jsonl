@@ -1,0 +1,2 @@
+{"ts": 1786909672.455799, "run_id": "django__django-13768-1786909672", "instance_id": "django__django-13768", "stage": "retrieval", "event": "started", "attempt": 0, "detail": {"query_chars": 624}}
+{"ts": 1786909673.4177978, "run_id": "django__django-13768-1786909672", "instance_id": "django__django-13768", "stage": "retrieval", "event": "succeeded", "attempt": 0, "detail": {"files": ["django/dispatch/dispatcher.py", "django/contrib/auth/__init__.py", "django/utils/autoreload.py", "django/core/management/base.py", "django/core/checks/model_checks.py"], "corpus_size": 854}}
