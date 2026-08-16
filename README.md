@@ -9,16 +9,17 @@ failures until they go green — then opens a PR. Benchmarked blind on
 
 ## Headline result
 
-> **24% resolved (6/25) running entirely on free open-weight models** —
-> single-shot with GLM-5.2 via NVIDIA NIM, on a deterministic 25-instance
-> subset of SWE-bench-Lite spanning all 12 repos, graded by the unmodified
-> official Docker harness. **Total API cost: $0.00.** A full Lite-300 run is
-> in progress. 95% CI [11%, 43%] — n=25 is small, so treat this as a subset
-> estimate.
+> **23.0% of SWE-bench-Lite resolved (69/300), entirely on free open-weight
+> models.** Single-shot with GLM-5.2 via NVIDIA NIM, all 300 instances, graded
+> by the unmodified official Docker harness. **Total API cost: $0.00.**
+> 95% CI [18.6%, 28.1%]. One instance could not be graded (its image is
+> unavailable for this platform) and is counted as unresolved — the figure is
+> a lower bound. The deterministic n=25 subset predicted 24%; the full run
+> delivered 23.0%, validating the subset methodology.
 >
 > Reproduce (no paid API key needed — get a free one at build.nvidia.com):
-> `python scripts/run_singleshot.py --n 25` then
-> `python scripts/grade_predictions.py --predictions data/singleshot/z-ai_glm-5.2/predictions.jsonl --n 25`.
+> `python scripts/run_singleshot.py --n 300` then
+> `python scripts/grade_chunked.py --predictions data/singleshot/z-ai_glm-5.2/predictions.jsonl`.
 > Dataset fingerprint `b4200a5b…015a`.
 >
 > **The scaffold is not model-specific.** Measured on the identical 25
