@@ -77,7 +77,7 @@ def _cost(model: str, input_tokens: int, output_tokens: int,
 
 
 def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: int,
-                            base_url: str, max_retries: int = 5) -> LLMResult:
+                            base_url: str, max_retries: int = 9) -> LLMResult:
     """One /chat/completions call against any OpenAI-compatible endpoint.
 
     Uses httpx directly (already present via the anthropic SDK) rather than
@@ -87,6 +87,7 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
     Free tiers rate-limit aggressively and by current traffic, so 429s and 5xx
     are retried with exponential backoff rather than failing an entire run.
     """
+    import random
     import time
 
     import httpx
@@ -125,7 +126,14 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
                              cost_usd=_cost(model, in_tok, out_tok), model=model)
         last = f"{resp.status_code}: {resp.text[:200]}"
         if resp.status_code == 429 or resp.status_code >= 500:
-            time.sleep(min(2 ** attempt, 30))  # backoff, capped
+            # Free tiers throttle on TOKENS, not just requests, and our prompts
+            # are large — so a 429 can persist for a while. Honor Retry-After
+            # when the server sends it; otherwise back off exponentially with a
+            # 90s ceiling plus jitter so parallel workers don't retry in lockstep.
+            hinted = resp.headers.get("retry-after")
+            delay = float(hinted) if (hinted or "").replace(".", "", 1).isdigit() \
+                else min(2 ** attempt, 90)
+            time.sleep(delay + random.uniform(0, 2))
             continue
         break  # 4xx other than 429 will not fix itself
     raise RuntimeError(f"{base_url} call failed after {max_retries} attempts — {last}")

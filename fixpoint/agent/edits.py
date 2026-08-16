@@ -68,10 +68,17 @@ _PATH_TAG_RE = re.compile(r"</?\s*path\s*>", re.IGNORECASE)
 
 
 def _clean_path(raw: str) -> str:
-    """Reduce the path line to a bare repo-relative path."""
+    """Reduce the path line to a bare repo-relative path.
+
+    Models decorate this line in predictable ways: xml tags, backticks, quotes,
+    and — because the prompt presents each file under a `## <path>` heading —
+    the markdown heading marker itself. All are stripped; the intent is never
+    ambiguous.
+    """
     p = _PATH_TAG_RE.sub("", raw)   # drop <path> / </path>
     p = p.strip().strip("`").strip()  # drop code-fence backticks
     p = p.strip('"').strip("'").strip()  # drop stray quotes
+    p = p.lstrip("#").lstrip("-").lstrip("*").strip()  # drop markdown heading/list markers
     return p
 
 

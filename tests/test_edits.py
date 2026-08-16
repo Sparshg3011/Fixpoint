@@ -156,3 +156,10 @@ def test_canonicalizer_leaves_rst_underlines_alone():
     edits = parse_edits(block(FILE, "Title\n===\nbody", "Title\n===\nnew"))
     assert len(edits) == 1
     assert "===" in edits[0].search
+
+
+def test_strips_markdown_heading_from_path():
+    """Regression: the prompt shows files under '## <path>', and a model copied
+    that heading marker into the edit block's path line."""
+    edits = parse_edits(block("## lib/matplotlib/cbook/__init__.py", "old", "new"))
+    assert edits[0].path == "lib/matplotlib/cbook/__init__.py"
