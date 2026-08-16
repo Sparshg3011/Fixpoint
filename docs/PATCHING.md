@@ -82,6 +82,50 @@ the right file and wrote something that applies, but it didn't fix the bug.
 That is precisely the population the replan loop targets — it gets a second and
 third attempt conditioned on the reproducer's failure output.
 
+## Model comparison: same scaffold, same 25 instances
+
+Every model below ran through the identical pipeline — same BM25 retrieval,
+same prompt, same SEARCH/REPLACE synthesizer, graded by the same unmodified
+harness. Only the model differs. NVIDIA NIM serves the open models free, so
+the comparison cost nothing.
+
+| model | apply rate | apply given the gold file was retrieved | cost (25) |
+|---|---|---|---|
+| Claude Sonnet 5 | 16/25 = 64% | **15/16 = 94%** | $7.21 |
+| z-ai/glm-5.2 | 18/25 = 72% | **15/16 = 94%** | $0.00 |
+| nvidia/llama-3.3-nemotron-super-49b | 1/25 = 4% | 1/16 = 6% | $0.00 |
+
+The conditional rate is the honest measure of the patcher: **Sonnet 5 and
+GLM-5.2 are indistinguishable at 94%** once retrieval does its job. Retrieval
+is the shared ceiling (recall@5 = 64%), not the model.
+
+### What the 49B model's 4% actually was
+
+Worth recording because the first read was wrong. Two causes, one of them ours:
+
+- **Our parser was too strict.** It emitted `>>>>>>> =======` as the divider
+  and `>>>>>>> >>>>>>> REPLACE` as the terminator — unambiguous intent in
+  syntax we rejected. Canonicalizing marker-only lines took parsing from 12/25
+  to 16/25 (measured by replaying the saved raw responses offline, no re-run).
+- **The model does not reproduce code verbatim.** It paraphrases and elides
+  with `...` inside SEARCH blocks, which can never match. That is a genuine
+  capability requirement of this edit format, and no parser fix helps.
+
+Lesson: before concluding "the model can't do it", replay the raw responses
+against a fixed parser. Half of this gap was our punctuation tolerance.
+
+### GLM out-localized BM25
+
+GLM-5.2's dominant failure was *"edit targets a file that was not provided"* —
+5 of its 7 failures. In **2 of those 5 it named the exact gold file our
+retriever had missed** (`django/contrib/admin/utils.py`,
+`django/utils/numberformat.py`). The model knew where the bug was; we simply
+hadn't handed it that file, so a correct patch was discarded.
+
+That is a concrete, cheap next improvement: when the model requests a file
+outside the retrieved set, fetch it and re-ask. On this subset it would
+recover 2 instances (+8 points of apply rate) for one extra call.
+
 ## Single-shot run #1 (n=25, Sonnet 5, 2026-07-14)
 
 First live run over the subset. The headline lesson is in the failure split:
