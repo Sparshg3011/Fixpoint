@@ -22,13 +22,20 @@ failures until they go green — then opens a PR. Benchmarked blind on
 > `python scripts/grade_chunked.py --predictions data/singleshot/z-ai_glm-5.2/predictions.jsonl`.
 > Dataset fingerprint `b4200a5b…015a`.
 >
-> **The scaffold is not model-specific.** Measured on the identical 25
-> instances, same prompt, same retrieval, same harness:
+> **The scaffold is not model-specific — and free models reach frontier
+> territory on it.** Same prompt, same retrieval, same harness throughout:
 >
-> | model | resolved | apply rate | apply *given retrieval hit* | cost |
-> |---|---|---|---|---|
-> | z-ai/glm-5.2 (free) | **6/25 = 24%** | 72% | **94%** | **$0.00** |
-> | claude-sonnet-5 (paid) | 9/25 = 36% | 64% | **94%** | $7.21 |
+> | model | scope | resolved | cost |
+> |---|---|---|---|
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | **35%** — CI [26%, 45%] | **$0.00** |
+> | z-ai/glm-5.2 (free) | **full Lite-300** | **23.0%** — CI [19%, 28%] | **$0.00** |
+> | claude-sonnet-5 (paid reference) | n=25 subset | 36% — CI [20%, 55%] | $7.21 |
+>
+> Nemotron-Ultra matches the paid frontier reference at zero cost (a full-300
+> Nemotron run is in progress). Conditional apply rate — the patcher's own
+> quality once retrieval finds the right file — is 94% for both GLM and
+> Sonnet; Nemotron converts 51% of its applying patches into resolves vs
+> GLM's 32%, the clearest capability gap the campaign surfaced.
 >
 > The conditional apply rate — the honest measure of the patcher once
 > retrieval does its job — is **identical at 94%**. Retrieval's recall@5 = 64%
