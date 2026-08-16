@@ -25,13 +25,35 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fixpoint.bench import load_lite
+from fixpoint.eval.chunking import DEFAULT_PRUNE_THRESHOLD_GB, parse_docker_size, plan_chunks
 from fixpoint.harness import read_instance_report, run_official_eval, summarize_report
 
 
-def prune_images() -> None:
-    """Drop every image not held by a running container. They re-pull on demand;
-    holding them costs VM disk we do not have."""
+def images_gb() -> float:
+    """Total size of the Docker image store, in GB (0.0 if unreadable)."""
+    r = subprocess.run(["docker", "system", "df", "--format", "{{.Type}}\t{{.Size}}"],
+                       capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 2 and parts[0].strip() == "Images":
+            return parse_docker_size(parts[1])
+    return 0.0
+
+
+def prune_if_needed(threshold_gb: float) -> bool:
+    """Prune the image store only when it crosses the threshold.
+
+    Pruning after every chunk (the first implementation) constantly re-downloads
+    the base and env layers that adjacent chunks share; with chunks ordered by
+    (repo, version) those layers are exactly what we want to KEEP until disk
+    pressure actually demands otherwise."""
+    used = images_gb()
+    if used < threshold_gb:
+        return False
     subprocess.run(["docker", "image", "prune", "-a", "-f"], capture_output=True)
+    print(f"  pruned image store ({used:.0f}GB > {threshold_gb:.0f}GB threshold)", flush=True)
+    return True
 
 
 def prepull(instance_ids: list[str], namespace: str = "swebench") -> tuple[int, int]:
@@ -73,6 +95,8 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--namespace", default="swebench", choices=["swebench", "none"])
+    ap.add_argument("--prune-threshold-gb", type=float, default=DEFAULT_PRUNE_THRESHOLD_GB,
+                    help="prune docker images only when the store exceeds this")
     args = ap.parse_args()
 
     preds_path = Path(args.predictions)
@@ -90,7 +114,10 @@ def main() -> int:
         print(f"resuming — {len(done)} instances already graded")
 
     todo = [i for i in with_patch if i not in done]
-    chunks = [todo[i:i + args.chunk_size] for i in range(0, len(todo), args.chunk_size)]
+    # Chunks grouped by (repo, version): each env layer downloads once, not
+    # once per chunk it would otherwise straddle.
+    meta = {i.instance_id: (i.repo, i.version) for i in load_lite()}
+    chunks = plan_chunks(todo, meta, max_chunk=args.chunk_size)
     print(f"{total} predictions ({empty} empty) — grading {len(todo)} in {len(chunks)} chunks "
           f"of <={args.chunk_size}, {args.workers} workers\n")
 
@@ -125,7 +152,7 @@ def main() -> int:
             "graded": len(done), "resolved": sum(done.values()),
             "per_instance": done,
         }, indent=2))
-        prune_images()
+        prune_if_needed(args.prune_threshold_gb)
 
     graded, resolved = len(done), sum(done.values())
     print(f"\n{model_name} — {time.time()-started:.0f}s total")
