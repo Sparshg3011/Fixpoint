@@ -11,23 +11,24 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-# Which API to talk to. "anthropic" (default) keeps the published Sonnet 5
-# result reproducible; "openai" targets ANY OpenAI-compatible endpoint —
-# NVIDIA NIM (free), Z.ai/GLM, OpenRouter, DeepSeek, a local Ollama server.
-# One adapter covers all of them because they share /chat/completions.
-BACKEND = os.environ.get("FIXPOINT_BACKEND", "anthropic")
+# Which API to talk to. Default is "openai" — meaning any OpenAI-compatible
+# endpoint — because Fixpoint runs on FREE open-weight models: NVIDIA NIM
+# serves GLM, Nemotron, DeepSeek and others at no cost, and the measured
+# results show an open model reaching most of a frontier model's resolve rate
+# on this scaffold. "anthropic" remains available for a paid comparison run.
+BACKEND = os.environ.get("FIXPOINT_BACKEND", "openai")
 
 # Base URL for the openai backend, e.g.
-#   NVIDIA NIM  https://integrate.api.nvidia.com/v1
+#   NVIDIA NIM  https://integrate.api.nvidia.com/v1   (free)
 #   Z.ai (GLM)  https://api.z.ai/api/paas/v4
-#   Ollama      http://localhost:11434/v1
-BASE_URL = os.environ.get("FIXPOINT_BASE_URL", "")
+#   Ollama      http://localhost:11434/v1             (local, free)
+BASE_URL = os.environ.get("FIXPOINT_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
-# Default model. Sonnet 5 is the iteration workhorse: near-Opus on coding at
-# ~60% the price, which matters when we sweep 25-300 instances repeatedly.
-# Override per run with FIXPOINT_MODEL (claude-opus-4-8 for a headline run, or
-# an open model id when FIXPOINT_BACKEND=openai).
-DEFAULT_MODEL = os.environ.get("FIXPOINT_MODEL", "claude-sonnet-5")
+# Default model: GLM-5.2, free via NVIDIA NIM. Chosen on measured evidence, not
+# vibes — of the models tested it matched the frontier model's conditional
+# apply rate (94%) and led on raw apply rate, at zero cost. Override with
+# FIXPOINT_MODEL.
+DEFAULT_MODEL = os.environ.get("FIXPOINT_MODEL", "z-ai/glm-5.2")
 
 # USD per 1M tokens (input, output). Used only to attach a dollar figure to each
 # call — the harness bills nothing. Unknown models price at 0.0, which is the

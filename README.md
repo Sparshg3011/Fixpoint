@@ -9,23 +9,38 @@ failures until they go green — then opens a PR. Benchmarked blind on
 
 ## Headline result
 
-> **9/25 = 36% resolved** — single-shot, Claude Sonnet 5, on a deterministic
-> 25-instance subset of SWE-bench-Lite spanning all 12 repos, graded by the
-> unmodified official Docker harness. 95% CI [20%, 55%] — n=25 is small, so
-> treat this as a subset estimate, not the Lite-300 figure (that run is next).
-> Cost $7.21 (~$0.29/instance), 246s to generate + 923s to grade.
+> **24% resolved (6/25) running entirely on free open-weight models** —
+> single-shot with GLM-5.2 via NVIDIA NIM, on a deterministic 25-instance
+> subset of SWE-bench-Lite spanning all 12 repos, graded by the unmodified
+> official Docker harness. **Total API cost: $0.00.** A full Lite-300 run is
+> in progress. 95% CI [11%, 43%] — n=25 is small, so treat this as a subset
+> estimate.
 >
-> Reproduce: `python scripts/run_singleshot.py --n 25` then
-> `python scripts/grade_predictions.py --predictions data/singleshot/predictions.jsonl --n 25`.
+> Reproduce (no paid API key needed — get a free one at build.nvidia.com):
+> `python scripts/run_singleshot.py --n 25` then
+> `python scripts/grade_predictions.py --predictions data/singleshot/z-ai_glm-5.2/predictions.jsonl --n 25`.
 > Dataset fingerprint `b4200a5b…015a`.
 >
-> Supporting numbers: patch **apply rate 94%** given retrieval found the right
-> file (15/16); retrieval **recall@5 = 64%**; **56%** of applying patches
-> resolved. The harness itself is calibrated — 24/25 instances grade red with
-> an empty patch and green with the gold patch; the 25th
-> (psf__requests-2674) is network-flaky and is documented in
-> [docs/CALIBRATION.md](docs/CALIBRATION.md), kept in the denominator, and did
-> **not** resolve here, so it is not inflating the number.
+> **The scaffold is not model-specific.** Measured on the identical 25
+> instances, same prompt, same retrieval, same harness:
+>
+> | model | resolved | apply rate | apply *given retrieval hit* | cost |
+> |---|---|---|---|---|
+> | z-ai/glm-5.2 (free) | **6/25 = 24%** | 72% | **94%** | **$0.00** |
+> | claude-sonnet-5 (paid) | 9/25 = 36% | 64% | **94%** | $7.21 |
+>
+> The conditional apply rate — the honest measure of the patcher once
+> retrieval does its job — is **identical at 94%**. Retrieval's recall@5 = 64%
+> is the shared ceiling, not the model. See
+> [docs/PATCHING.md](docs/PATCHING.md) for the full comparison, including a
+> third model that scored 4% and why half of that gap turned out to be our
+> own parser.
+>
+> The harness itself is calibrated: 24/25 instances grade red with an empty
+> patch and green with the gold patch; the 25th (psf__requests-2674) is
+> network-flaky, documented in [docs/CALIBRATION.md](docs/CALIBRATION.md),
+> kept in the denominator, and did not resolve — so it is not inflating
+> anything.
 
 ## Why this is hard
 
