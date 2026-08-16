@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from fixpoint.agent.llm import DEFAULT_MODEL
 from fixpoint.agent.patcher import generate_patch
 from fixpoint.agent.reproducer import generate_reproducer
+from fixpoint.diary import Diary
 from fixpoint.harness.sandbox import ReproResult, run_reproducer
 
 
@@ -68,7 +69,8 @@ def _feedback(prior_diff: str, repro: ReproResult) -> str:
 
 
 def solve(problem_statement: str, files: dict[str, str], image: str, base_commit: str, *,
-          max_attempts: int = 3, model: str = DEFAULT_MODEL) -> SolveResult:
+          max_attempts: int = 3, model: str = DEFAULT_MODEL,
+          diary: Diary | None = None) -> SolveResult:
     """Run the bounded loop for one instance and return the best patch found."""
     traj: list[Step] = []
     cost = 0.0
@@ -84,6 +86,10 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     traj.append(Step("reproducer",
                      f"red-on-base={reproducer_valid} (exit {base_check.exit_code})",
                      green=not reproducer_valid))
+    if diary:
+        diary.record("reproducer", "succeeded" if reproducer_valid else "failed",
+                     red_on_base=reproducer_valid, exit_code=base_check.exit_code,
+                     script=script)
 
     # 2a. Broken compass: the reproducer can't tell a fix from nothing, so its
     #     green is not evidence. Produce one best-effort patch and report it
@@ -110,11 +116,19 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
         cost += patch.llm.cost_usd
         if not patch.diff:
             traj.append(Step("attempt", f"#{attempt}: no usable patch — {patch.error}", green=False))
+            if diary:
+                diary.record("developer", "failed", attempt=attempt, error=patch.error)
             feedback = f"You produced no applicable edits: {patch.error}. Re-read the files and try again."
             continue
         best_diff = patch.diff  # keep the latest applicable diff as our best effort
 
+        if diary:
+            diary.record("developer", "succeeded", attempt=attempt, diff=patch.diff)
         repro = run_reproducer(image, base_commit, patch=patch.diff, script=script)
+        if diary:
+            diary.record("tester", "succeeded" if repro.green else "failed", attempt=attempt,
+                         applied=repro.applied, exit_code=repro.exit_code,
+                         output=repro.output[-2000:])
         traj.append(Step("attempt",
                          f"#{attempt}: applied={repro.applied} reproducer_exit={repro.exit_code}",
                          green=repro.green))
@@ -124,5 +138,8 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
         feedback = _feedback(patch.diff, repro)
 
     traj.append(Step("result", f"green={green} after {attempt} attempt(s)", green=green))
+    if diary:
+        diary.record("loop", "succeeded" if green else "failed", attempt=attempt,
+                     green=green, attempts=attempt, cost_usd=round(cost, 6))
     return SolveResult(diff=best_diff, green=green, attempts=attempt, cost_usd=round(cost, 6),
                        trajectory=traj, reproducer_valid=reproducer_valid)
