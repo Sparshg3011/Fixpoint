@@ -34,6 +34,37 @@ def prune_images() -> None:
     subprocess.run(["docker", "image", "prune", "-a", "-f"], capture_output=True)
 
 
+def prepull(instance_ids: list[str], namespace: str = "swebench") -> tuple[int, int]:
+    """Pull each instance image explicitly as linux/amd64 before grading.
+
+    THE fix for Apple Silicon. These images publish an amd64-only manifest, and
+    the harness pulls without specifying a platform — so on an arm64 host Docker
+    refuses with "no matching manifest", which the harness reports as
+    "Error building image". That cost ~40% of instances in the first attempt.
+    Pulling explicitly here puts the image in the local store, and the harness
+    then finds it instead of trying to fetch it itself.
+
+    Returns (pulled_ok, failed).
+    """
+    from fixpoint.bench import get, load_lite
+    from fixpoint.eval.images import image_key
+
+    insts = load_lite()
+    ok = bad = 0
+    for iid in instance_ids:
+        img = image_key(get(insts, iid), namespace=namespace)
+        # --quiet keeps the layer chatter out of the log; failures still surface
+        # via the return code, and a failed pull simply means this instance
+        # cannot be graded (recorded as ungraded, never as unresolved).
+        r = subprocess.run(["docker", "pull", "--platform", "linux/amd64", "--quiet", img],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            ok += 1
+        else:
+            bad += 1
+    return ok, bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--predictions", required=True)
@@ -68,6 +99,9 @@ def main() -> int:
         run_id = f"{base}-c{ci}"
         t0 = time.time()
         print(f"chunk {ci}/{len(chunks)} ({len(chunk)} instances) …", flush=True)
+        pulled, failed_pull = prepull(chunk, args.namespace)
+        print(f"  pre-pulled {pulled}/{len(chunk)} images"
+              + (f" ({failed_pull} unavailable)" if failed_pull else ""), flush=True)
         try:
             run_official_eval(preds_path, run_id=run_id, instance_ids=chunk,
                               namespace=args.namespace, max_workers=args.workers)
