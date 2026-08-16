@@ -98,7 +98,8 @@ async function showResults() {
       <div class="stat"><span class="k">instances graded</span>
         <span class="v">${totalGraded}</span><span class="s">in isolated Docker sandboxes</span></div>
       <div class="stat"><span class="k">total API cost</span>
-        <span class="v">${usd(totalCost)}</span><span class="s">open-weight models via free endpoints</span></div>
+        <span class="v">${usd(totalCost)}</span>
+        <span class="s">${models.filter((m) => !m.cost_usd).length} of ${models.length} models ran free</span></div>
     </div>
 
     <div class="section">
