@@ -43,7 +43,14 @@ Hard rules:
 - Write the file path exactly as shown in the "## " heading above each file —
   the bare path and nothing else on that line.
 - Copy the SEARCH text EXACTLY from the file — same indentation, same
-  whitespace — so it can be located. Include enough lines to be unique (3-8).
+  whitespace, same line breaks — so it can be located. Include enough lines to
+  be unique (3-8).
+- NEVER abbreviate. Do not write "..." or "# rest of function" or otherwise
+  skip lines inside a SEARCH block: it is matched literally against the file,
+  so an elided line means it will never be found. If a region is too long to
+  copy, choose a shorter one.
+- Use the markers exactly as shown: `<<<<<<< SEARCH`, `=======`, and
+  `>>>>>>> REPLACE`, each alone on its own line.
 - Only edit files that were shown to you. Never edit tests.
 - Prefer the minimal change that fixes the root cause. Don't reformat
   unrelated code.

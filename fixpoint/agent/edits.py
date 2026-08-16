@@ -75,10 +75,43 @@ def _clean_path(raw: str) -> str:
     return p
 
 
+# Different models decorate the conflict markers differently. Observed in real
+# runs: ">>>>>>> =======" used as the divider, ">>>>>>> >>>>>>> REPLACE" as the
+# terminator, and "<<<<<< SEARCH" with six brackets instead of seven. The
+# INTENT is unambiguous in every case, so we canonicalize marker-only lines
+# before parsing rather than rejecting the block. Judging a model on our
+# tolerance for its punctuation would measure the wrong thing.
+_MARK = r"[<>=]{4,}"
+_OPEN_RE = re.compile(rf"^(?:{_MARK}\s*)+SEARCH\s*$")
+_CLOSE_RE = re.compile(rf"^(?:{_MARK}\s*)+REPLACE\s*$")
+_DIVIDER_RE = re.compile(rf"^(?:{_MARK}\s*)+$")
+
+
+def _canonicalize_markers(text: str) -> str:
+    """Rewrite marker-only lines to the canonical form the block regex expects.
+
+    Only lines consisting ENTIRELY of markers (optionally with SEARCH/REPLACE)
+    are touched, and 4+ marker characters are required — so a docstring's `>>>`
+    doctest prompt or a short `===` rule is left alone.
+    """
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if _OPEN_RE.match(s):
+            out.append("<<<<<<< SEARCH")
+        elif _CLOSE_RE.match(s):
+            out.append(">>>>>>> REPLACE")
+        elif _DIVIDER_RE.match(s):
+            out.append("=======")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def parse_edits(text: str) -> list[Edit]:
     """Pull every SEARCH/REPLACE block out of a model response."""
     edits: list[Edit] = []
-    for m in _BLOCK_RE.finditer(text):
+    for m in _BLOCK_RE.finditer(_canonicalize_markers(text)):
         path = _clean_path(m.group("path"))
         if path:  # skip a block whose path line was pure decoration
             edits.append(Edit(path=path, search=m.group("search"), replace=m.group("replace")))

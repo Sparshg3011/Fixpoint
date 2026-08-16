@@ -125,3 +125,34 @@ def test_cache_writes_carry_the_25_percent_premium():
     full = _cost("claude-sonnet-5", 1_000_000, 0)
     written = _cost("claude-sonnet-5", 0, 0, cache_write_tokens=1_000_000)
     assert written == pytest.approx(full * 1.25)
+
+
+# --- marker variants seen from non-Claude models -----------------------------
+
+@pytest.mark.parametrize("divider,closer", [
+    ("=======", ">>>>>>> REPLACE"),                 # canonical
+    (">>>>>>> =======", ">>>>>>> >>>>>>> REPLACE"),  # observed from Nemotron
+    ("=========", ">>>>>> REPLACE"),                 # length variation
+])
+def test_parses_marker_variants(divider, closer):
+    """Models decorate conflict markers differently; intent is unambiguous, so
+    the parser canonicalizes rather than rejecting the block."""
+    text = f"{FILE}\n<<<<<< SEARCH\nold\n{divider}\nnew\n{closer}"
+    edits = parse_edits(text)
+    assert len(edits) == 1, f"failed to parse divider={divider!r} closer={closer!r}"
+    assert edits[0].search == "old" and edits[0].replace == "new"
+
+
+def test_canonicalizer_leaves_doctest_prompts_alone():
+    """A docstring's >>> prompt must not be mistaken for a conflict marker."""
+    content = 'def f():\n    """\n    >>> f()\n    1\n    """\n    return 1\n'
+    edits = parse_edits(block(FILE, '    >>> f()\n    1', '    >>> f()\n    2'))
+    diff = synthesize_diff({FILE: content}, edits)
+    assert "+    >>> f()" in diff or "2" in diff
+
+
+def test_canonicalizer_leaves_rst_underlines_alone():
+    """A short === underline in a docstring is not a divider."""
+    edits = parse_edits(block(FILE, "Title\n===\nbody", "Title\n===\nnew"))
+    assert len(edits) == 1
+    assert "===" in edits[0].search
