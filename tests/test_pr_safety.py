@@ -93,3 +93,13 @@ def test_require_key_still_demands_a_key_for_remote_openai_backend(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     with _pytest.raises(SystemExit):
         secrets.require_api_key()
+
+
+# --- harness report path sanitization ---------------------------------------
+
+def test_model_names_with_slashes_map_to_the_harness_directory_form():
+    """Regression: 'z-ai/glm-5.2' nests a directory. The harness writes '__',
+    so reads must too — otherwise a successful eval reads back as 'errored'."""
+    from fixpoint.harness.official import safe_model_name
+    assert safe_model_name("fixpoint-singleshot-z-ai/glm-5.2") == "fixpoint-singleshot-z-ai__glm-5.2"
+    assert safe_model_name("claude-sonnet-5") == "claude-sonnet-5"

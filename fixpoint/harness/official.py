@@ -133,9 +133,21 @@ def run_official_eval(
         rollup.replace(CALIB_DIR / rollup.name)
 
 
+def safe_model_name(model_name: str) -> str:
+    """The on-disk form of a model name.
+
+    The harness uses model_name_or_path as a DIRECTORY name, so an id like
+    "z-ai/glm-5.2" would nest a directory. It rewrites "/" to "__"; we must
+    apply the same rewrite when reading, or every report lookup misses and a
+    perfectly good evaluation reads back as "errored" (which is exactly what
+    happened once).
+    """
+    return model_name.replace("/", "__")
+
+
 def read_instance_report(run_id: str, model_name: str, instance_id: str) -> dict:
     """Read the per-instance report.json the harness wrote for this run."""
-    report_path = LOGS_DIR / run_id / model_name / instance_id / "report.json"
+    report_path = LOGS_DIR / run_id / safe_model_name(model_name) / instance_id / "report.json"
     data = json.loads(report_path.read_text())
     # The per-instance file nests everything under the instance id.
     return data.get(instance_id, data)
