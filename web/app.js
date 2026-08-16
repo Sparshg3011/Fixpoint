@@ -288,13 +288,18 @@ async function showRun(runId) {
   $("#run-state").className = `chip ${live ? "chip-accent" : "chip-dim"}`;
   if (live) {
     const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/stream`);
-    es.onmessage = (m) => applyEvent(JSON.parse(m.data));
+    es.onmessage = (m) => {
+      const e = JSON.parse(m.data);
+      applyEvent(e);
+      if (e.stage === "loop") { es.close(); mountPRPanel(runId); }
+    };
     es.onerror = () => es.close();
     player = { stop: () => es.close() };
   } else {
     const { events } = await api(`/runs/${encodeURIComponent(runId)}`);
     player = new Replayer(events);
     player.start();
+    mountPRPanel(runId);
   }
 }
 
@@ -354,6 +359,80 @@ class Replayer {
   }
 }
 
+/* ---------- new fix (the product flow) --------------------------------- */
+async function showNewFix() {
+  view.innerHTML = `
+    <h1>Fix an issue</h1>
+    <p class="muted" style="margin:0 0 22px;max-width:640px">Point Fixpoint at any public
+      GitHub repo and an issue. It clones the repo, finds the relevant files, writes a
+      patch with bounded retries, verifies it applies with <span class="mono">git apply --check</span>,
+      and can open a PR — always on your own fork, never upstream.</p>
+    <form id="fixform" class="panel" style="max-width:640px;padding:22px;display:grid;gap:14px">
+      <label>Repository <span class="muted">(owner/name or URL)</span>
+        <input class="search" style="width:100%;margin-top:6px" name="repo"
+               placeholder="pallets/flask" autocomplete="off"></label>
+      <label>Issue URL <span class="muted">(or paste the description below)</span>
+        <input class="search" style="width:100%;margin-top:6px" name="issue_url"
+               placeholder="https://github.com/owner/repo/issues/123" autocomplete="off"></label>
+      <label>Issue description
+        <textarea class="search" style="width:100%;margin-top:6px;min-height:120px;resize:vertical"
+                  name="issue_text" placeholder="What is broken, and how should it behave?"></textarea></label>
+      <label>Ref <span class="muted">(branch, tag, or commit — default branch if empty)</span>
+        <input class="search" style="width:100%;margin-top:6px" name="ref" placeholder="main"></label>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="fchip on" type="submit" style="padding:10px 22px;font-size:14px">Start fix run</button>
+        <span id="fixerr" class="err" style="padding:0"></span>
+      </div>
+    </form>`;
+  $("#fixform").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = Object.fromEntries([...f.entries()].map(([k, v]) => [k, v.trim()]));
+    $("#fixerr").textContent = "";
+    try {
+      const r = await fetch("/api/fix", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || r.status);
+      location.hash = `#/runs/${encodeURIComponent(data.run_id)}`;
+    } catch (err) { $("#fixerr").textContent = err.message; }
+  });
+}
+
+/* PR panel shown on fix runs once a patch exists */
+async function mountPRPanel(runId) {
+  const meta = await fetch(`/api/fix/${encodeURIComponent(runId)}`)
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!meta || !meta.has_diff) return;
+  const el = document.createElement("div");
+  el.className = "panel"; el.style.cssText = "margin-top:16px;padding:16px 18px";
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="chip ${meta.applied ? "chip-green" : "chip-amber"}">
+        ${meta.applied ? "patch applies cleanly" : "patch did not verify"}</span>
+      <span class="muted" style="font-size:13px">verification tier: static (git apply --check) —
+        repo tests not executed</span>
+      <button class="fchip" id="pr-dry" style="margin-left:auto">Preview PR</button>
+      <button class="fchip on" id="pr-go" hidden>Create PR on my fork</button>
+    </div>
+    <pre id="pr-out" class="mono muted" style="font-size:12px;white-space:pre-wrap;margin:10px 0 0"></pre>`;
+  $("#view").appendChild(el);
+  const call = async (execute) => {
+    $("#pr-out").textContent = execute ? "opening PR…" : "computing dry run…";
+    const r = await fetch(`/api/fix/${encodeURIComponent(runId)}/pr`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ execute }) });
+    const data = await r.json();
+    if (!r.ok) { $("#pr-out").textContent = data.detail || `error ${r.status}`; return; }
+    $("#pr-out").textContent = execute
+      ? "" : `${data.url}\nbranches: ${data.branch} -> ${data.base_branch}`;
+    if (execute) $("#pr-out").innerHTML =
+      `PR opened: <a href="${esc(data.url)}" target="_blank" rel="noopener">${esc(data.url)}</a>`;
+    else $("#pr-go").hidden = false;
+  };
+  $("#pr-dry").onclick = () => call(false);
+  $("#pr-go").onclick = () => call(true);
+}
+
 /* ---------- router --------------------------------------------------------- */
 async function route() {
   const hash = location.hash || "#/results";
@@ -364,6 +443,7 @@ async function route() {
     const runMatch = hash.match(/^#\/runs\/(.+)$/);
     if (runMatch) await showRun(decodeURIComponent(runMatch[1]));
     else if (hash.startsWith("#/runs")) await showRuns();
+    else if (hash.startsWith("#/new")) await showNewFix();
     else await showResults();
   } catch (err) {
     view.innerHTML = `<div class="err">failed to load: ${esc(err.message)}</div>`;

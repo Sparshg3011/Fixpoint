@@ -205,6 +205,61 @@ async def run_stream(run_id: str) -> StreamingResponse:
                              headers={"Cache-Control": "no-cache"})
 
 
+# ---------------------------------------------------------------------------
+# The product flow: submit a repo + issue, watch it live, open a PR on green.
+# ---------------------------------------------------------------------------
+
+@app.post("/api/fix")
+async def submit_fix(body: dict) -> dict:
+    from fixpoint import service
+
+    try:
+        run_id = await asyncio.to_thread(
+            service.start_fix,
+            body.get("repo", ""), body.get("issue_text"), body.get("issue_url"),
+            body.get("ref") or None, body.get("model") or None)
+    except Exception as e:
+        raise HTTPException(400, str(e)) from e
+    return {"run_id": run_id}
+
+
+@app.get("/api/fix/{run_id}")
+def fix_meta(run_id: str) -> dict:
+    from fixpoint import service
+
+    meta = service.get_meta(run_id)
+    if meta is None:
+        raise HTTPException(404, "unknown fix run")
+    # The diff can be large; the drawer wants it, the status poll does not.
+    return {**meta, "has_diff": bool(meta.get("diff", "").strip())}
+
+
+@app.post("/api/fix/{run_id}/pr")
+async def fix_pr(run_id: str, body: dict) -> dict:
+    """Open (or dry-run) a PR carrying this run's patch — always on the
+    authenticated user's own fork; fixpoint.pr refuses anything else."""
+    from fixpoint import pr as pr_mod
+    from fixpoint import service
+
+    meta = service.get_meta(run_id)
+    if meta is None:
+        raise HTTPException(404, "unknown fix run")
+    if not meta.get("diff", "").strip():
+        raise HTTPException(400, "this run produced no patch")
+    try:
+        res = await asyncio.to_thread(
+            pr_mod.open_pr,
+            upstream=meta["repo"], base_commit=meta["commit"], patch=meta["diff"],
+            instance_id=meta["run_id"], problem_statement=meta.get("issue_text", ""),
+            resolved=False, dry_run=not body.get("execute", False))
+    except pr_mod.PRSafetyError as e:
+        raise HTTPException(403, str(e)) from e
+    except Exception as e:
+        raise HTTPException(500, str(e)) from e
+    return {"url": res.url, "branch": res.branch, "base_branch": res.base_branch,
+            "dry_run": res.dry_run}
+
+
 # Frontend last, so /api/* wins routing. html=True serves index.html at /.
 if WEB.exists():
     app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
