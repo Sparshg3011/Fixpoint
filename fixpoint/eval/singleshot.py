@@ -22,6 +22,7 @@ from fixpoint.bench import Instance, agent_view
 from fixpoint.eval.recall import first_hit_rank, gold_files
 from fixpoint.retrieval import load_corpus, tree_at
 from fixpoint.retrieval.bm25 import BM25Searcher
+from fixpoint.retrieval.guided import resolve_requested_paths
 
 # The `diff --git a/<path> b/<path>` header line names each file the diff edits.
 _DIFF_GIT_RE = re.compile(r"^diff --git a/(\S+) b/\S+$", re.MULTILINE)
@@ -63,11 +64,13 @@ class SingleShotResult:
     error: str | None      # patcher/sanitizer error, if any
     raw_response: str      # the model's raw output, kept for offline debugging
     cost_usd: float
-    top_files: list[str]   # retrieved candidates shown to the model
+    top_files: list[str]   # files actually shown to the model (incl. guided adds)
     gold_files: list[str]  # grading-side annotation (not shown to the agent)
-    gold_retrieved_rank: int | None  # where the gold file landed in retrieval
+    gold_retrieved_rank: int | None  # where the gold file landed in BM25's ranking
     input_tokens: int
     output_tokens: int
+    # Defaulted fields must come last (dataclass ordering).
+    guided_retrieval: bool = False  # did a model-requested file rescue this?
 
 
 def run_single(inst: Instance, k: int = 5, model: str | None = None) -> SingleShotResult:
@@ -82,6 +85,19 @@ def run_single(inst: Instance, k: int = 5, model: str | None = None) -> SingleSh
 
     kwargs = {"model": model} if model else {}
     patch = generate_patch(av.problem_statement, files, **kwargs)
+
+    # Model-guided second round: if the model asked to edit a file BM25 never
+    # surfaced, that request IS a localization hypothesis — resolve it against
+    # the real corpus and re-ask once with the file included. Measured on this
+    # subset, 2 of 5 such requests named the exact gold file.
+    guided_used = False
+    if not patch.diff and patch.missing_paths:
+        extra = resolve_requested_paths(patch.missing_paths, by_path, already_given=files)
+        if extra:
+            guided_used = True
+            files = {**files, **extra}
+            patch = generate_patch(av.problem_statement, files, **kwargs)
+
     applied = bool(patch.diff) and git_apply_check(tree, patch.diff)
 
     gold = list(gold_files(inst))
@@ -92,7 +108,8 @@ def run_single(inst: Instance, k: int = 5, model: str | None = None) -> SingleSh
         error=patch.error,
         raw_response=patch.llm.text,
         cost_usd=patch.llm.cost_usd,
-        top_files=ranked,
+        top_files=list(files),
+        guided_retrieval=guided_used,
         gold_files=gold,
         gold_retrieved_rank=first_hit_rank(ranked, gold),
         input_tokens=patch.llm.input_tokens,

@@ -12,7 +12,7 @@ bounded replan loop; here it runs exactly once.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fixpoint.agent.edits import Edit, parse_edits, synthesize_diff
 from fixpoint.agent.llm import DEFAULT_MODEL, LLMResult, call
@@ -63,6 +63,11 @@ class PatchResult:
     edits: list[Edit]
     llm: LLMResult
     error: str | None  # set if edits couldn't be located; drives the replan loop
+    # Files the model tried to edit that we never gave it. This is the model
+    # doing localization for us: measured on the n=25 subset, 2 of 5 such
+    # requests named the exact gold file BM25's top-5 had missed. The caller
+    # fetches these and re-asks rather than discarding an otherwise good patch.
+    missing_paths: list[str] = field(default_factory=list)
 
 
 def _stable_prompt(problem_statement: str, files: dict[str, str]) -> str:
@@ -110,10 +115,14 @@ def generate_patch(problem_statement: str, files: dict[str, str], *,
     edits = parse_edits(result.text)
     if not edits:
         return PatchResult(diff="", edits=[], llm=result, error="model produced no edit blocks")
+    # Surface files the model wanted but never received, so the caller can
+    # fetch them and re-ask instead of throwing the attempt away.
+    missing = [p for p in dict.fromkeys(e.path for e in edits) if p not in files]
     try:
         diff = synthesize_diff(files, edits)
     except Exception as e:  # EditApplyError and friends — a real, reportable failure
-        return PatchResult(diff="", edits=edits, llm=result, error=str(e))
+        return PatchResult(diff="", edits=edits, llm=result, error=str(e), missing_paths=missing)
     if not diff:
-        return PatchResult(diff="", edits=edits, llm=result, error="edits produced no net change")
-    return PatchResult(diff=diff, edits=edits, llm=result, error=None)
+        return PatchResult(diff="", edits=edits, llm=result, error="edits produced no net change",
+                           missing_paths=missing)
+    return PatchResult(diff=diff, edits=edits, llm=result, error=None, missing_paths=missing)
