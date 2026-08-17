@@ -151,3 +151,45 @@ Fixes (both offline-validated, no API spend):
 
 The apply-rate re-measurement (gate: >=90%) and the single-shot resolve rate
 run next, once API credits are topped up.
+
+## Sanitizer tier 3: measured fuzzy matching + whole-corpus targets (2026-08-16)
+
+The GLM Lite-300 autopsy split the 83 empty patches into: 39 edits targeting a
+file the model was never shown, 22 SEARCH-not-found, 15 no blocks at all, 7
+no-net-change. Two sanitizer changes attack the first two classes — each
+measured on the saved raw responses before shipping (the same offline-replay
+discipline as run #1; responses are immutable, so re-reading them with a
+better sanitizer corrects the measurement rather than granting a retry).
+
+**Fuzzy window match** (tier 3, after exact and indent-shift): stripped-line
+windows scored with difflib, accepted only above a threshold AND without a
+non-overlapping rival within 0.02 — two plausible sites mean we cannot know
+which one the model meant, so we refuse rather than guess. Threshold swept on
+the 83 dead rows:
+
+| threshold | rescued |
+|---|---|
+| 0.98 | 5 |
+| **0.95** | **11** |
+| 0.90 | 12 |
+| 0.85 | 16 |
+
+The knee is 0.95: doubling 0.98's yield, while 0.90 adds a single instance
+for meaningfully looser matching. Eyeballing the 0.95 marginals confirmed the
+intended failure mode — django-11564's model dropped `self.` while copying
+(`if varname is None:` for `if self.varname is None:`), right site, typo-level.
+
+**Whole-corpus edit targets**: `synthesize_diff` now resolves an edit path
+against the full checkout when it wasn't among the shown files. Models know
+these codebases from training and write from-memory edits; the SEARCH text
+must still match the real file, so hallucinated content fails exactly as
+before. Of the 39 unprovided-file failures, only 2 had memory good enough to
+match — the model's recall of file *names* far outruns its recall of file
+*bodies* — but the safety property costs nothing and the 2 are free.
+
+Net effect, applied retroactively by `scripts/rescue_parse.py` (originals
+archived in `pre-rescue-archive/`): GLM-300 apply 217→228 (72.3%→76.0%),
+nemotron-n100 68→70. The 11+2 recovered patches went to the official harness
+for grading like any others; resolve-rate deltas land in the scoreboard, not
+in this file, and empty rows that stayed empty are exactly the model's own
+failures — 15 produced no blocks, 46 transcribed code that doesn't exist.

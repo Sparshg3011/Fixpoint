@@ -101,3 +101,24 @@ A trivial "mention OR BM25@5" fusion recovers this one instance for free,
 lifting recall@5 from 64% to 68%. RRF is the principled version; the point is
 that the two signals miss *different* instances, which is exactly when fusion
 pays.
+
+## Mentions-first ranking shipped (2026-08-16, measured on Lite-300)
+
+The fusion argument above got its full-scale test. `retrieval/rank.py` now
+puts issue-mentioned paths first — a path token counts only if it resolves
+UNIQUELY against the real tree (a bare `utils.py` matching twelve directories
+identifies nothing and is ignored) — and BM25 fills the remaining slots.
+
+Replayed offline over all 300 instances (stored BM25 rankings + gold files,
+zero API calls):
+
+| ranking | localization@5 |
+|---|---|
+| BM25 alone | 203/300 = 67.7% |
+| mentions first, BM25 fill | **209/300 = 69.7%** |
+
+36 instances had a resolvable mention; 6 flipped miss→hit and **0 flipped
+hit→miss** — the uniqueness rule means a mention never displaces a gold file
+that BM25 had already found. Strictly-positive changes at zero cost are rare;
+this is one. The sibling-confusion and symptom-vocabulary classes above remain
+open (they need chunk-level or dense signal).
