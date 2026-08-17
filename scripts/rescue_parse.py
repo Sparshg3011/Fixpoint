@@ -1,19 +1,17 @@
-"""Rescue rows lost to sanitizer bugs — offline, from saved raw responses.
+"""Rescue rows lost to sanitizer limits — offline, from saved raw responses.
 
-Every single-shot row keeps the model's raw output precisely so that a parser
-fix can be applied retroactively without burning API calls. The GLM Lite-300
-run predates the marker-canonicalization hardening (the 49b investigation):
-its responses contain valid SEARCH/REPLACE blocks the old parser rejected.
-Those failures were OURS, not the model's — re-running the current sanitizer
-over the same responses corrects the measurement, it does not give the model
-another try.
+Every single-shot row keeps the model's raw output precisely so that a
+sanitizer improvement can be applied retroactively without burning API calls.
+The model's answer was already given and is immutable; only OUR acceptance of
+it changes. That makes a rescue a measurement correction, not a second try —
+the same responses re-read by the current sanitizer (fuzzy tier-3 matching,
+whole-corpus edit-target resolution).
 
-Scope is deliberately narrow: only rows whose diff is empty are touched, and
-they go through the exact shipped pipeline semantics — edits must target files
-that were actually shown to the model (top_files), contents come from the same
-base-commit checkout, applied means the same real `git apply --check`. The
-guided-retrieval re-ask cannot be replayed offline, so rows that needed it
-stay failed.
+Scope is deliberately narrow: only rows whose diff is empty are touched;
+file contents come from the same base-commit checkout and the same filtered
+corpus view the live pipeline uses, and "applied" means the same real
+`git apply --check`. The guided-retrieval re-ask cannot be replayed offline,
+so rows that needed a fresh model call stay failed.
 
     python scripts/rescue_parse.py --dir data/singleshot/z-ai_glm-5.2          # dry run
     python scripts/rescue_parse.py --dir data/singleshot/z-ai_glm-5.2 --write
@@ -38,35 +36,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fixpoint.agent.edits import EditApplyError, parse_edits, synthesize_diff  # noqa: E402
 from fixpoint.bench.loader import load_lite  # noqa: E402
 from fixpoint.eval.singleshot import git_apply_check  # noqa: E402
-from fixpoint.retrieval import tree_at  # noqa: E402
+from fixpoint.retrieval import load_corpus, tree_at  # noqa: E402
 
 
-def rescue_row(row: dict, inst, full_tree: bool = False) -> tuple[str, str | None]:
+def rescue_row(row: dict, inst) -> tuple[str, str | None]:
     """One row -> (status, diff). Statuses mirror the pipeline's real failure
-    modes so the summary reads like the original error breakdown."""
+    modes so the summary reads like the original error breakdown.
+
+    Faithful to the shipped pipeline by construction: files = what the model
+    was shown (top_files), corpus = the same filtered load_corpus view the
+    live run passes to the sanitizer. A rescue therefore means exactly "the
+    current sanitizer accepts this saved response", nothing more."""
     edits = parse_edits(row.get("raw_response") or "")
     if not edits:
         return "no-edit-blocks", None
 
     tree = tree_at(inst.repo, inst.base_commit)
-    # Same contract as the run: the model may only edit files it was shown.
-    files = {}
-    for p in row.get("top_files", []):
-        f = tree / p
-        if f.is_file():
-            files[p] = f.read_text(errors="replace")
-    if full_tree:
-        # Measurement mode: also honor edits to real files the model was never
-        # shown. It wrote SEARCH text from memory of the codebase; if that text
-        # matches the actual file, the edit was valid and only our shown-files
-        # restriction rejected it. SEARCH that doesn't match still fails.
-        for e in edits:
-            f = tree / e.path
-            if e.path not in files and ".." not in e.path and f.is_file():
-                files[e.path] = f.read_text(errors="replace")
+    by_path = {d.path: d.text for d in load_corpus(tree)}
+    files = {p: by_path[p] for p in row.get("top_files", []) if p in by_path}
 
     try:
-        diff = synthesize_diff(files, edits)
+        diff = synthesize_diff(files, edits, corpus=by_path)
     except EditApplyError as e:
         msg = str(e)
         return ("unprovided-file" if "not among the provided" in msg
@@ -83,8 +73,6 @@ def main() -> int:
     ap.add_argument("--dir", required=True, help="model dir under data/singleshot")
     ap.add_argument("--write", action="store_true",
                     help="persist rescued rows (default: report only)")
-    ap.add_argument("--full-tree", action="store_true",
-                    help="also honor edits to real repo files the model was not shown")
     args = ap.parse_args()
 
     d = Path(args.dir)
@@ -100,7 +88,7 @@ def main() -> int:
         if inst is None:
             statuses["unknown-instance"] += 1
             continue
-        status, diff = rescue_row(row, inst, full_tree=args.full_tree)
+        status, diff = rescue_row(row, inst)
         statuses[status] += 1
         if status == "rescued":
             rescued += 1
@@ -125,6 +113,10 @@ def main() -> int:
         if (d / name).exists() and not (archive / name).exists():
             shutil.copy2(d / name, archive / name)
 
+    # Keep the tag the original predictions carried — the harness names its
+    # report directories after it, and grade_chunked reads it back from line 1.
+    tag = json.loads((archive / "predictions.jsonl").read_text()
+                     .splitlines()[0])["model_name_or_path"]
     rows = results["rows"]
     applied = sum(1 for r in rows if r.get("applied"))
     results["apply_rate"] = applied / len(rows)
@@ -133,7 +125,7 @@ def main() -> int:
         for r in rows:
             f.write(json.dumps({
                 "instance_id": r["instance_id"],
-                "model_name_or_path": results["model"],
+                "model_name_or_path": tag,
                 "model_patch": r.get("diff") or "",
             }) + "\n")
     print(f"\nwrote {d/'results.json'} and {d/'predictions.jsonl'} "

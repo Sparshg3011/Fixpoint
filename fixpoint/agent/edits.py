@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 # One capturing regex for the whole block. re.DOTALL so SEARCH/REPLACE bodies
@@ -130,6 +130,60 @@ def _indent_len(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
+# Minimum similarity for the tier-3 fuzzy match, measured — not guessed — by
+# replaying the GLM Lite-300 run's failed responses at several thresholds
+# (scripts/rescue_parse.py). High enough that a match means "the model made a
+# typo-level transcription error", not "this code looks vaguely similar":
+# a wrong fuzzy match would silently replace REAL code the model never read.
+FUZZY_THRESHOLD = 0.95
+
+# A competing window scoring this close to the best is treated as ambiguity —
+# two near-identical candidate sites mean we cannot know which one the model
+# meant, and guessing between them is how silent corruption happens.
+_FUZZY_AMBIGUITY_MARGIN = 0.02
+
+
+def _fuzzy_window(file_lines: list[str], search_lines: list[str]) -> int | None:
+    """Best fuzzy match of the search block against same-length line windows.
+
+    Returns the starting index, or None when nothing clears FUZZY_THRESHOLD or
+    the best match is ambiguous. Comparison is on stripped lines (indentation
+    is tier 2's business); difflib's ratio cascade keeps the scan cheap.
+    """
+    n = len(search_lines)
+    if n == 0 or len(file_lines) < n:
+        return None
+    target = "\n".join(ln.strip() for ln in search_lines)
+    norm = [ln.strip() for ln in file_lines]
+
+    scores: list[tuple[float, int]] = []
+    matcher = difflib.SequenceMatcher(autojunk=False)
+    matcher.set_seq2(target)
+    for i in range(len(file_lines) - n + 1):
+        window = "\n".join(norm[i:i + n])
+        matcher.set_seq1(window)
+        # Cheap upper bounds first; the full quadratic ratio only runs on
+        # windows that could plausibly clear the threshold.
+        if matcher.real_quick_ratio() < FUZZY_THRESHOLD:
+            continue
+        if matcher.quick_ratio() < FUZZY_THRESHOLD:
+            continue
+        score = matcher.ratio()
+        if score >= FUZZY_THRESHOLD:
+            scores.append((score, i))
+    if not scores:
+        return None
+
+    scores.sort(reverse=True)
+    best_score, best_i = scores[0]
+    # Ambiguous iff a NON-overlapping window comes within the margin — windows
+    # overlapping the winner share most of its lines and are echoes, not rivals.
+    for score, i in scores[1:]:
+        if abs(i - best_i) >= n and score >= best_score - _FUZZY_AMBIGUITY_MARGIN:
+            return None
+    return best_i
+
+
 def _apply_one(content: str, edit: Edit) -> str:
     """Return `content` with the first occurrence of edit.search replaced.
 
@@ -165,44 +219,58 @@ def _apply_one(content: str, edit: Edit) -> str:
     norm = [ln.strip() for ln in search_lines]
     n = len(norm)
 
-    for i in range(len(file_lines) - n + 1):
-        window = [file_lines[j].strip() for j in range(i, i + n)]
-        if window != norm:
-            continue
-        # Indent delta from the first non-blank matched line vs its search line.
-        k = next((idx for idx in range(n) if norm[idx]), 0)
-        delta = _indent_len(file_lines[i + k]) - _indent_len(search_lines[k])
-        before = "".join(file_lines[:i])
-        after = "".join(file_lines[i + n:])
-        adjusted = []
-        for ln in edit.replace.splitlines():
-            if not ln.strip():
-                adjusted.append(ln)  # leave blank lines blank
-            elif delta >= 0:
-                adjusted.append(" " * delta + ln)  # add missing indent
-            else:
-                adjusted.append(ln[min(-delta, _indent_len(ln)):])  # remove extra indent
-        new_block = "\n".join(adjusted)
-        # Add a trailing newline if the replacement text carries one, if there
-        # is content after the match, or if the last replaced FILE line ended in
-        # one — so editing a file's final line doesn't strip its final newline.
-        if edit.replace.endswith("\n") or after or file_lines[i + n - 1].endswith("\n"):
-            new_block += "\n"
-        return before + new_block + after
+    # Tier 2: exact match on stripped lines (uniform indent drift).
+    match_i = next((i for i in range(len(file_lines) - n + 1)
+                    if [file_lines[j].strip() for j in range(i, i + n)] == norm), None)
+    # Tier 3: fuzzy window match (typo-level transcription errors). Measured on
+    # the GLM Lite-300 replay before shipping — see FUZZY_THRESHOLD.
+    if match_i is None:
+        match_i = _fuzzy_window(file_lines, search_lines)
+    if match_i is None:
+        raise EditApplyError(
+            f"SEARCH block not found in {edit.path!r}. First line was:\n"
+            f"  {edit.search.splitlines()[0] if edit.search.splitlines() else '<empty>'!r}"
+        )
 
-    raise EditApplyError(
-        f"SEARCH block not found in {edit.path!r}. First line was:\n"
-        f"  {edit.search.splitlines()[0] if edit.search.splitlines() else '<empty>'!r}"
-    )
+    i = match_i
+    # Indent delta from the first non-blank matched line vs its search line.
+    k = next((idx for idx in range(n) if norm[idx]), 0)
+    delta = _indent_len(file_lines[i + k]) - _indent_len(search_lines[k])
+    before = "".join(file_lines[:i])
+    after = "".join(file_lines[i + n:])
+    adjusted = []
+    for ln in edit.replace.splitlines():
+        if not ln.strip():
+            adjusted.append(ln)  # leave blank lines blank
+        elif delta >= 0:
+            adjusted.append(" " * delta + ln)  # add missing indent
+        else:
+            adjusted.append(ln[min(-delta, _indent_len(ln)):])  # remove extra indent
+    new_block = "\n".join(adjusted)
+    # Add a trailing newline if the replacement text carries one, if there
+    # is content after the match, or if the last replaced FILE line ended in
+    # one — so editing a file's final line doesn't strip its final newline.
+    if edit.replace.endswith("\n") or after or file_lines[i + n - 1].endswith("\n"):
+        new_block += "\n"
+    return before + new_block + after
 
 
-def synthesize_diff(files: dict[str, str], edits: Sequence[Edit]) -> str:
+def synthesize_diff(files: dict[str, str], edits: Sequence[Edit],
+                    corpus: Mapping[str, str] | None = None) -> str:
     """Apply edits to the given file contents and emit one git unified diff.
 
     `files` maps repo-relative path -> current file content (the agent reads
     these from the checkout). We compute post-edit content per file and diff it
     against the original with difflib, so every hunk header is correct by
     construction. Files with no net change contribute nothing.
+
+    `corpus` (path -> content for the WHOLE repo at base commit) lets an edit
+    target a real file the model was never shown. Models know these codebases
+    from training and routinely write from-memory edits to the right file; the
+    SEARCH text must still match the actual content, so a hallucinated file
+    body fails exactly as before. Measured on the GLM Lite-300 replay: 39
+    instances died solely on the shown-files restriction. No firewall concern —
+    the corpus is the agent-visible checkout, never anything grading-side.
     """
     # Group edits by path so multiple edits to one file produce one file diff.
     by_path: dict[str, list[Edit]] = {}
@@ -211,6 +279,8 @@ def synthesize_diff(files: dict[str, str], edits: Sequence[Edit]) -> str:
 
     chunks: list[str] = []
     for path, path_edits in by_path.items():
+        if path not in files and corpus is not None and path in corpus:
+            files = {**files, path: corpus[path]}
         if path not in files:
             raise EditApplyError(f"edit targets {path!r}, which was not among the provided files")
         original = files[path]

@@ -33,8 +33,8 @@ from fixpoint.agent.secrets import load_env
 from fixpoint.diary import RUNS_DIR, Diary
 from fixpoint.eval.singleshot import git_apply_check
 from fixpoint.retrieval import load_corpus, tree_at
-from fixpoint.retrieval.bm25 import BM25Searcher
 from fixpoint.retrieval.guided import resolve_requested_paths
+from fixpoint.retrieval.rank import ranked_files
 
 _REPO_RE = re.compile(r"(?:github\.com[/:])?(?P<owner>[\w.-]+)/(?P<name>[\w.-]+?)(?:\.git|/.*)?$")
 _ISSUE_URL_RE = re.compile(r"github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)")
@@ -91,13 +91,13 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
     d.record("sandbox", "succeeded", corpus_files=len(docs))
 
     d.record("retrieval", "started", query_chars=len(issue_text))
-    ranked = [p for p, _ in BM25Searcher(docs).search(issue_text, k=k)]
+    ranked = ranked_files(docs, issue_text, k=k)
     files = {p: by_path[p] for p in ranked}
     d.record("retrieval", "succeeded", files=ranked)
 
     patch, feedback = None, None
     for attempt in range(1, attempts + 1):
-        patch = generate_patch(issue_text, files, feedback=feedback, **kwargs)
+        patch = generate_patch(issue_text, files, feedback=feedback, corpus=by_path, **kwargs)
         # The model asking for an unseen file is a localization hypothesis —
         # honor it once per attempt (measured: 2/5 such requests were the
         # exact file BM25 missed).
@@ -107,7 +107,7 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
                 d.record("retrieval", "progress", attempt=attempt,
                          model_requested=sorted(extra))
                 files = {**files, **extra}
-                patch = generate_patch(issue_text, files, feedback=feedback, **kwargs)
+                patch = generate_patch(issue_text, files, feedback=feedback, corpus=by_path, **kwargs)
         if patch.diff:
             d.record("developer", "succeeded", attempt=attempt, diff=patch.diff)
             break

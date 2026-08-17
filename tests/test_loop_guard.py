@@ -28,7 +28,8 @@ def fakes(monkeypatch):
     def fake_reproducer(problem_statement, files, *, model=None):
         return "print('repro')\n", _llm()
 
-    def fake_patch(problem_statement, files, *, model=None, feedback=None, cache=False):
+    def fake_patch(problem_statement, files, *, model=None, feedback=None, cache=False,
+                   corpus=None):
         calls["patch_feedback"].append(feedback)
         calls["patch_cache"].append(cache)
         return PatchResult(diff=DIFF, edits=[], llm=_llm(), error=None)

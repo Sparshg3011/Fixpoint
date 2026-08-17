@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from fixpoint.agent.edits import Edit, parse_edits, synthesize_diff
-from fixpoint.agent.llm import DEFAULT_MODEL, LLMResult, call
+from fixpoint.agent.llm import DEFAULT_MAX_TOKENS, DEFAULT_MODEL, LLMResult, call
 
 SYSTEM = r"""You are an expert software engineer fixing a bug in a large codebase.
 You are given a GitHub issue and the full text of the few files most likely to
@@ -98,7 +98,7 @@ def _volatile_prompt(feedback: str | None) -> str:
 
 def generate_patch(problem_statement: str, files: dict[str, str], *,
                    model: str = DEFAULT_MODEL, feedback: str | None = None,
-                   cache: bool = False) -> PatchResult:
+                   cache: bool = False, corpus: dict[str, str] | None = None) -> PatchResult:
     """One LLM round-trip; parse and synthesize. Never raises on a bad patch —
     it returns error text so the caller (the loop) can react.
 
@@ -106,6 +106,8 @@ def generate_patch(problem_statement: str, files: dict[str, str], *,
     than a fresh attempt. `cache` puts the issue+files prefix in the prompt
     cache — set it when the same prefix will be sent again (the replan loop),
     not for a one-shot call, which would pay the 1.25x write for no read.
+    `corpus` (whole-checkout path -> content) lets the sanitizer honor an edit
+    to a real file the model was not shown — see synthesize_diff.
     """
     stable, volatile = _stable_prompt(problem_statement, files), _volatile_prompt(feedback)
     if cache:
@@ -113,13 +115,40 @@ def generate_patch(problem_statement: str, files: dict[str, str], *,
     else:
         result = call(SYSTEM, stable + volatile, model=model)
     edits = parse_edits(result.text)
+    if not edits and result.finish_reason == "length":
+        # Truncation retry: a reasoning model can burn the whole output budget
+        # on chain-of-thought and get cut off before its first edit block —
+        # measured at 64/300 instances on the Nemotron-Ultra Lite-300 run.
+        # One retry at double the budget; the two calls are merged into a
+        # single LLMResult so cost accounting stays truthful. Uniform pipeline
+        # behavior, not a per-run knob.
+        retry = call(SYSTEM, (volatile if cache else stable + volatile), model=model,
+                     max_tokens=DEFAULT_MAX_TOKENS * 2,
+                     **({"cache_prefix": stable} if cache else {}))
+        result = LLMResult(
+            text=retry.text,
+            input_tokens=result.input_tokens + retry.input_tokens,
+            output_tokens=result.output_tokens + retry.output_tokens,
+            cost_usd=round(result.cost_usd + retry.cost_usd, 6),
+            model=retry.model,
+            cache_write_tokens=result.cache_write_tokens + retry.cache_write_tokens,
+            cache_read_tokens=result.cache_read_tokens + retry.cache_read_tokens,
+            finish_reason=retry.finish_reason,
+        )
+        edits = parse_edits(result.text)
     if not edits:
-        return PatchResult(diff="", edits=[], llm=result, error="model produced no edit blocks")
+        # Distinguish "the model chose not to emit blocks" from "the output was
+        # cut off at max_tokens" — a reasoning model can burn the whole budget
+        # thinking and the two cases look identical without finish_reason.
+        error = ("response truncated at max_tokens before any edit blocks"
+                 if result.finish_reason == "length"
+                 else "model produced no edit blocks")
+        return PatchResult(diff="", edits=[], llm=result, error=error)
     # Surface files the model wanted but never received, so the caller can
     # fetch them and re-ask instead of throwing the attempt away.
     missing = [p for p in dict.fromkeys(e.path for e in edits) if p not in files]
     try:
-        diff = synthesize_diff(files, edits)
+        diff = synthesize_diff(files, edits, corpus=corpus)
     except Exception as e:  # EditApplyError and friends — a real, reportable failure
         return PatchResult(diff="", edits=edits, llm=result, error=str(e), missing_paths=missing)
     if not diff:

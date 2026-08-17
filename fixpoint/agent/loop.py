@@ -70,8 +70,12 @@ def _feedback(prior_diff: str, repro: ReproResult) -> str:
 
 def solve(problem_statement: str, files: dict[str, str], image: str, base_commit: str, *,
           max_attempts: int = 3, model: str = DEFAULT_MODEL,
-          diary: Diary | None = None) -> SolveResult:
-    """Run the bounded loop for one instance and return the best patch found."""
+          diary: Diary | None = None, corpus: dict[str, str] | None = None) -> SolveResult:
+    """Run the bounded loop for one instance and return the best patch found.
+
+    `corpus` (whole-checkout path -> content) is passed to the sanitizer so an
+    edit targeting a real-but-unshown file can still apply — see synthesize_diff.
+    """
     traj: list[Step] = []
     cost = 0.0
 
@@ -95,7 +99,7 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     #     green is not evidence. Produce one best-effort patch and report it
     #     UNVERIFIED — never claim green off a reproducer that didn't go red.
     if not reproducer_valid:
-        patch = generate_patch(problem_statement, files, model=model, cache=True)
+        patch = generate_patch(problem_statement, files, model=model, cache=True, corpus=corpus)
         cost += patch.llm.cost_usd
         traj.append(Step("attempt", "#1: reproducer not trustworthy — best-effort patch, unverified",
                          green=None))
@@ -112,7 +116,8 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
     for attempt in range(1, max_attempts + 1):
         # cache=True: attempts 2+ re-read the identical issue+files prefix at
         # 0.1x instead of full price — the loop's main cost lever.
-        patch = generate_patch(problem_statement, files, model=model, feedback=feedback, cache=True)
+        patch = generate_patch(problem_statement, files, model=model, feedback=feedback,
+                               cache=True, corpus=corpus)
         cost += patch.llm.cost_usd
         if not patch.diff:
             traj.append(Step("attempt", f"#{attempt}: no usable patch — {patch.error}", green=False))
