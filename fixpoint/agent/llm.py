@@ -62,6 +62,11 @@ class LLMResult:
     model: str
     cache_write_tokens: int = 0  # prefix written to cache this call (1.25x)
     cache_read_tokens: int = 0   # prefix served from cache this call (0.1x)
+    # Why the model stopped: "stop" is a complete answer; "length" means the
+    # output was TRUNCATED at max_tokens — for a reasoning model that can mean
+    # the whole budget went to chain-of-thought and the content is empty, which
+    # otherwise looks identical to "the model produced no edit blocks".
+    finish_reason: str = ""
 
 
 def _cost(model: str, input_tokens: int, output_tokens: int,
@@ -77,6 +82,52 @@ def _cost(model: str, input_tokens: int, output_tokens: int,
     )
 
 
+# Ceiling on any single retry sleep. A free tier once hinted Retry-After in the
+# THOUSANDS of seconds; honoring it verbatim parked every worker for hours and
+# looked exactly like a hung run (10h wall, 80s CPU). We retry sooner and let
+# the server 429 us again if it must — bounded impatience beats unbounded sleep.
+_MAX_BACKOFF_S = 90.0
+
+# Total wall-clock budget for ONE call including all retries and queue time.
+# Without this, 9 retries x (read timeout + backoff) lets a single instance
+# consume over an hour; with it, the worst case is bounded and visible.
+_CALL_BUDGET_S = float(os.environ.get("FIXPOINT_CALL_BUDGET_S", "2400"))
+
+
+def _drain_sse(lines) -> tuple[str, dict, str]:
+    """Fold an OpenAI-style SSE stream into (text, usage, finish_reason).
+
+    Pure function over an iterable of lines so it is testable without a socket.
+    Reasoning models interleave `reasoning_content` deltas with `content`
+    deltas; only content is the answer, so only content is kept.
+    """
+    import json as _json
+
+    parts: list[str] = []
+    usage: dict = {}
+    finish = ""
+    for raw in lines:
+        line = raw.strip()
+        if not line.startswith("data:"):
+            continue  # keep-alive comments and blank separators
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            chunk = _json.loads(data)
+        except ValueError:
+            continue  # torn frame from a flaky proxy — nothing to salvage
+        if chunk.get("usage"):
+            usage = chunk["usage"]
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
+            if delta.get("content"):
+                parts.append(delta["content"])
+            if choice.get("finish_reason"):
+                finish = choice["finish_reason"]
+    return "".join(parts), usage, finish
+
+
 def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: int,
                             base_url: str, max_retries: int = 9) -> LLMResult:
     """One /chat/completions call against any OpenAI-compatible endpoint.
@@ -85,9 +136,19 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
     adding the openai package — the request is a small JSON body and doing it
     by hand keeps the dependency list honest.
 
-    Free tiers rate-limit aggressively and by current traffic, so 429s and 5xx
-    are retried with exponential backoff rather than failing an entire run.
+    STREAMING by design, not for UX: a 550B model generating thousands of
+    tokens can legitimately take longer than any sane whole-body read timeout,
+    and the free tier adds queue time on top. With streaming, the read timeout
+    applies BETWEEN chunks — a slow-but-alive generation never trips it, while
+    a genuinely dead connection still fails fast and gets retried.
+
+    Three failure classes are retried with capped backoff: 429s (free tiers
+    throttle on tokens, not requests), 5xx, and transport errors (timeouts,
+    resets — the previous version let these propagate and crash the instance).
+    Everything is bounded by a per-call wall-clock budget so no single instance
+    can silently absorb hours.
     """
+    import json as _json
     import random
     import time
 
@@ -103,6 +164,10 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
     payload = {
         "model": model,
         "max_tokens": max_tokens,
+        "stream": True,
+        # Ask for token counts on the final chunk; servers that predate this
+        # option 400 on it and we fall back to non-streaming below.
+        "stream_options": {"include_usage": True},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
     }
@@ -110,37 +175,72 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
     if key:  # a local Ollama server needs no key
         headers["Authorization"] = f"Bearer {key}"
 
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    # connect/write fail fast; read is per-chunk while streaming, sized for the
+    # free tier's queue-before-first-token delay rather than a whole generation.
+    timeout = httpx.Timeout(connect=30.0, read=300.0, write=60.0, pool=30.0)
+    deadline = time.monotonic() + _CALL_BUDGET_S
+
     last = ""
     for attempt in range(max_retries):
-        resp = httpx.post(f"{base_url.rstrip('/')}/chat/completions",
-                          json=payload, headers=headers, timeout=600.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            msg = data["choices"][0]["message"]
-            # Reasoning models may put the answer in content and their chain of
-            # thought elsewhere; we only ever want content.
-            text = msg.get("content") or ""
-            usage = data.get("usage") or {}
-            in_tok = usage.get("prompt_tokens", 0)
-            out_tok = usage.get("completion_tokens", 0)
-            return LLMResult(text=text, input_tokens=in_tok, output_tokens=out_tok,
-                             cost_usd=_cost(model, in_tok, out_tok), model=model)
-        last = f"{resp.status_code}: {resp.text[:200]}"
-        if resp.status_code == 429 or resp.status_code >= 500:
-            # Free tiers throttle on TOKENS, not just requests, and our prompts
-            # are large — so a 429 can persist for a while. Honor Retry-After
-            # when the server sends it; otherwise back off exponentially with a
-            # 90s ceiling plus jitter so parallel workers don't retry in lockstep.
-            hinted = resp.headers.get("retry-after")
-            delay = float(hinted) if (hinted or "").replace(".", "", 1).isdigit() \
-                else min(2 ** attempt, 90)
-            time.sleep(delay + random.uniform(0, 2))
-            continue
-        break  # 4xx other than 429 will not fix itself
-    raise RuntimeError(f"{base_url} call failed after {max_retries} attempts — {last}")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            last = f"{last} [call budget {_CALL_BUDGET_S:.0f}s exhausted]".strip()
+            break
+        try:
+            with httpx.stream("POST", url, json=payload, headers=headers,
+                              timeout=timeout) as resp:
+                if resp.status_code == 200:
+                    if payload.get("stream"):
+                        text, usage, finish = _drain_sse(resp.iter_lines())
+                    else:  # non-streaming fallback path (see 400 handling)
+                        data = _json.loads(resp.read())
+                        msg = data["choices"][0]["message"]
+                        text = msg.get("content") or ""
+                        usage = data.get("usage") or {}
+                        finish = data["choices"][0].get("finish_reason") or ""
+                    in_tok = usage.get("prompt_tokens", 0)
+                    out_tok = usage.get("completion_tokens", 0)
+                    return LLMResult(text=text, input_tokens=in_tok, output_tokens=out_tok,
+                                     cost_usd=_cost(model, in_tok, out_tok), model=model,
+                                     finish_reason=finish)
+                body = resp.read().decode("utf-8", "replace")[:300]
+                last = f"{resp.status_code}: {body}"
+                if resp.status_code == 400 and payload.get("stream") and "stream" in body:
+                    # The server rejected streaming or stream_options — drop
+                    # them and retry the same request the old-fashioned way.
+                    payload.pop("stream", None)
+                    payload.pop("stream_options", None)
+                    continue
+                if not (resp.status_code == 429 or resp.status_code >= 500):
+                    break  # 4xx other than 429 will not fix itself
+                hinted = resp.headers.get("retry-after")
+                try:
+                    delay = min(float(hinted), _MAX_BACKOFF_S)
+                except (TypeError, ValueError):
+                    delay = min(2.0 ** attempt, _MAX_BACKOFF_S)
+        except httpx.HTTPError as e:
+            # Read timeout, reset, DNS blip — transient by nature. Same capped
+            # backoff as a 5xx; crashing the whole instance on one flaky socket
+            # (the old behavior) threw away a finished retrieval for nothing.
+            last = f"transport {type(e).__name__}: {e}"
+            delay = min(2.0 ** attempt, _MAX_BACKOFF_S)
+        # Jitter so parallel workers don't retry in lockstep; never sleep past
+        # the budget deadline.
+        time.sleep(max(0.0, min(delay + random.uniform(0, 2), deadline - time.monotonic())))
+    raise RuntimeError(f"{url} call failed after {max_retries} attempts — {last}")
 
 
-def call(system: str, user: str, *, model: str = DEFAULT_MODEL, max_tokens: int = 8000,
+# Base output budget per call. 8000 was chosen for the SDK's non-streaming
+# guard and "a single-file patch never needs more" — which held until reasoning
+# models: measured on the Nemotron-Ultra Lite-300 run, 64/300 responses burned
+# the whole budget on chain-of-thought and truncated before any edit block.
+# The patcher now retries once at double this on truncation (see patcher.py).
+DEFAULT_MAX_TOKENS = int(os.environ.get("FIXPOINT_MAX_TOKENS", "8000"))
+
+
+def call(system: str, user: str, *, model: str = DEFAULT_MODEL,
+         max_tokens: int = DEFAULT_MAX_TOKENS,
          cache_prefix: str | None = None) -> LLMResult:
     """One non-streaming message. Returns the concatenated text and its cost.
 
