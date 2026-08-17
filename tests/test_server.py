@@ -40,7 +40,21 @@ def client(tmp_path, monkeypatch):
                     "stage": "loop", "event": "succeeded", "attempt": 1,
                     "detail": {"green": True}}),
     ]))
+    # A loop-mode run lives under data/loop/ and must surface as its own row.
+    (tmp_path / "loop" / "modelx").mkdir(parents=True)
+    (tmp_path / "loop" / "modelx" / "results.json").write_text(json.dumps({
+        "model": "vendor/modelx", "mode": "loop", "n": 2, "total_cost_usd": 0.0,
+        "rows": [
+            {"instance_id": "r__r-1", "applied": True, "loop_green": True,
+             "diff": "diff --git a/f b/f\n", "gold_retrieved_rank": 1,
+             "top_files": ["f"], "gold_files": ["f"], "cost_usd": 0,
+             "trajectory": [{"kind": "reproducer", "detail": "red-on-base=True", "green": False}]},
+        ]}))
+    (tmp_path / "loop" / "modelx" / "graded.json").write_text(json.dumps({
+        "model": "fixpoint-loop-vendor/modelx", "total_predictions": 2, "empty": 1,
+        "graded": 1, "resolved": 1, "per_instance": {"r__r-1": True}}))
     monkeypatch.setattr(srv, "SINGLESHOT", tmp_path / "singleshot")
+    monkeypatch.setattr(srv, "LOOP", tmp_path / "loop")
     monkeypatch.setattr(srv, "RUNS", tmp_path / "runs")
     monkeypatch.setattr(srv, "CALIBRATION", tmp_path / "calibration")
     return TestClient(srv.app)
@@ -49,13 +63,31 @@ def client(tmp_path, monkeypatch):
 def test_results_discovers_models_from_disk(client):
     models = client.get("/api/results").json()["models"]
     assert {m["model"] for m in models} == {"vendor/modelx", "vendor/ungraded"}
+    assert {m["mode"] for m in models} == {"single-shot", "loop"}
+
+
+def test_loop_rows_are_addressable_and_labeled(client):
+    """Same model name in both modes must remain two distinct rows with
+    distinct instance-explorer addresses."""
+    models = {m["dir"]: m for m in client.get("/api/results").json()["models"]}
+    assert "modelx" in models and "loop:modelx" in models
+    assert models["loop:modelx"]["mode"] == "loop"
+    assert models["loop:modelx"]["resolve_rate"] == pytest.approx(0.5)
+    rows = client.get("/api/results/loop:modelx/instances").json()["instances"]
+    assert rows[0]["loop_green"] is True
+    detail = client.get("/api/results/loop:modelx/instances/r__r-1").json()
+    assert detail["trajectory"][0]["kind"] == "reproducer"
+    # single-shot rows carry neither loop marker
+    ss = client.get("/api/results/modelx/instances/r__r-1").json()
+    assert ss["trajectory"] is None
 
 
 def test_resolve_rate_is_null_until_something_was_graded(client):
     """An ungraded model showing 0.0% resolved would be a lie."""
-    models = {m["model"]: m for m in client.get("/api/results").json()["models"]}
-    assert models["vendor/modelx"]["resolve_rate"] == pytest.approx(0.25)
-    assert models["vendor/ungraded"]["resolve_rate"] is None
+    # Keyed by dir, not model name — the same model can appear in both modes.
+    models = {m["dir"]: m for m in client.get("/api/results").json()["models"]}
+    assert models["modelx"]["resolve_rate"] == pytest.approx(0.25)
+    assert models["ungraded"]["resolve_rate"] is None
 
 
 def test_instance_verdicts(client):
@@ -72,6 +104,14 @@ def test_instance_detail_serves_the_diff(client):
 def test_unknown_model_and_instance_404(client):
     assert client.get("/api/results/nope/instances").status_code == 404
     assert client.get("/api/results/modelx/instances/nope").status_code == 404
+
+
+def test_dir_addressing_rejects_traversal(client):
+    """'loop:..' passes a naive parent check without ever resolving — the name
+    must be validated as a plain component before touching the filesystem."""
+    for evil in ("loop:..", "loop:../singleshot/modelx", "..", ".", "loop:.git",
+                 "other:modelx"):
+        assert client.get(f"/api/results/{evil}/instances").status_code == 404, evil
 
 
 def test_runs_list_and_events(client):

@@ -84,12 +84,14 @@ async function showResults() {
 
   view.innerHTML = `
     <h1>Benchmark results</h1>
-    <p class="muted" style="margin:0 0 22px">Single-shot resolve rates on SWE-bench-Lite,
-      graded by the unmodified official Docker harness. Every row is read live from
-      artifacts on disk — nothing on this page is hardcoded.</p>
+    <p class="muted" style="margin:0 0 22px">Resolve rates on SWE-bench-Lite,
+      graded by the unmodified official Docker harness. <b>1-shot</b> rows are one
+      attempt with no execution feedback; <b>loop</b> rows replan against the agent's
+      own reproducer. Every row is read live from artifacts on disk — nothing on
+      this page is hardcoded.</p>
     <div class="hero">
       <div class="stat stat-hero">
-        <span class="k">best resolve rate — ${esc(shortModel(head.model))}</span>
+        <span class="k">best resolve rate — ${esc(shortModel(head.model))} (${esc(head.mode)})</span>
         <span class="v">${pct(head.resolve_rate)}</span>
         <span class="s">${head.resolved}/${head.n} instances · official harness verdicts</span>
       </div>
@@ -111,7 +113,10 @@ async function showResults() {
         <tbody id="model-rows">
           ${models.map((m) => `
             <tr data-dir="${esc(m.dir)}">
-              <td class="mono">${esc(shortModel(m.model))}</td>
+              <td class="mono">${esc(shortModel(m.model))}
+                ${m.mode === "loop"
+                  ? '<span class="chip chip-accent" title="reproducer-driven replan loop with execution feedback">loop</span>'
+                  : '<span class="chip chip-dim" title="one attempt, no execution feedback">1-shot</span>'}</td>
               <td class="num">n=${m.n}</td>
               <td>${funnel(m)}</td>
               <td class="num">${pct(m.apply_rate)}</td>
@@ -178,7 +183,9 @@ function paintInstances() {
     <tr data-iid="${esc(r.instance_id)}">
       <td class="mono">${esc(r.instance_id)}</td>
       <td><span class="chip ${chipFor[r.verdict]}">${r.verdict}</span>
-          ${r.guided ? '<span class="chip chip-accent" title="model-guided retrieval fired">guided</span>' : ""}</td>
+          ${r.guided ? '<span class="chip chip-accent" title="model-guided retrieval fired">guided</span>' : ""}
+          ${r.loop_green === true ? '<span class="chip chip-green" title="the agent\'s own reproducer went green">self-test ✓</span>'
+            : r.loop_green === false ? '<span class="chip chip-dim" title="the agent\'s own reproducer never went green">self-test ✗</span>' : ""}</td>
       <td class="num">${r.gold_rank ?? "miss"}</td>
       <td class="muted" style="font-size:12px">${esc(r.error || "")}</td>
     </tr>`).join("") ||
@@ -208,6 +215,11 @@ async function openDrawer(dir, iid) {
         <dt>cost</dt><dd>${usd(d.cost_usd)}</dd>
         ${d.error ? `<dt>failure</dt><dd style="color:var(--red)">${esc(d.error)}</dd>` : ""}
       </dl>
+      ${Array.isArray(d.trajectory) && d.trajectory.length ? `
+      <h2 style="margin-bottom:8px">Loop trajectory</h2>
+      <dl class="kv">${d.trajectory.map((s) => `
+        <dt>${esc(s.kind)}</dt><dd>${esc(s.detail)}</dd>`).join("")}
+      </dl>` : ""}
       <h2 style="margin-bottom:8px">Generated patch</h2>
       ${renderDiff(d.diff)}
     </div>`;

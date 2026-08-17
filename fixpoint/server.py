@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -28,6 +29,7 @@ from fixpoint.diary import EVENTS, STAGES, read
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SINGLESHOT = REPO_ROOT / "data" / "singleshot"
+LOOP = REPO_ROOT / "data" / "loop"
 CALIBRATION = REPO_ROOT / "data" / "calibration"
 RUNS = REPO_ROOT / "runs"
 WEB = REPO_ROOT / "web"
@@ -42,11 +44,32 @@ def _load(path: Path) -> dict | None:
         return None
 
 
-def _model_dirs() -> list[Path]:
-    if not SINGLESHOT.exists():
-        return []
-    # Only direct children; archives (e.g. n100-archive) nest deeper on purpose.
-    return sorted(d for d in SINGLESHOT.iterdir() if d.is_dir())
+def _model_dirs() -> list[tuple[str, Path]]:
+    """(mode, dir) for every model artifact directory on disk. Two modes exist:
+    single-shot (one attempt, no execution feedback) and loop (reproducer-driven
+    replan) — the scoreboard must say which is which, they are different claims."""
+    out: list[tuple[str, Path]] = []
+    for mode, root in (("single-shot", SINGLESHOT), ("loop", LOOP)):
+        if root.exists():
+            # Only direct children; archives (e.g. n100-archive) nest deeper on purpose.
+            out.extend((mode, d) for d in sorted(root.iterdir()) if d.is_dir())
+    return out
+
+
+_DIR_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _resolve_dir(model_dir: str) -> Path | None:
+    """Instance endpoints address a row as 'name' (single-shot, back-compat)
+    or 'loop:name'. The name is validated as a single plain path component
+    BEFORE touching the filesystem — a lexical parent check alone is
+    bypassable ('loop:..' has parent == root without ever resolving)."""
+    mode, _, name = model_dir.rpartition(":")
+    if mode not in ("", "loop") or not _DIR_NAME_RE.fullmatch(name) or ".." in name:
+        return None
+    root = LOOP if mode == "loop" else SINGLESHOT
+    d = root / name
+    return d if d.is_dir() else None
 
 
 @app.get("/api/meta")
@@ -59,7 +82,7 @@ def meta() -> dict:
 def results() -> dict:
     """Scoreboard: one row per model directory found on disk."""
     models = []
-    for d in _model_dirs():
+    for mode, d in _model_dirs():
         res = _load(d / "results.json")
         graded = _load(d / "graded.json")
         if not res and not graded:
@@ -69,7 +92,8 @@ def results() -> dict:
         applied = sum(1 for r in rows if r.get("applied"))
         row = {
             "model": (res or {}).get("model") or (graded or {}).get("model") or d.name,
-            "dir": d.name,
+            "mode": mode,
+            "dir": d.name if mode == "single-shot" else f"loop:{d.name}",
             "n": n,
             "generated": len(rows),
             "applied": applied,
@@ -94,8 +118,8 @@ def results() -> dict:
 
 @app.get("/api/results/{model_dir}/instances")
 def instances(model_dir: str) -> dict:
-    d = SINGLESHOT / model_dir
-    if not d.is_dir() or d.parent != SINGLESHOT:  # no path traversal
+    d = _resolve_dir(model_dir)
+    if d is None:
         raise HTTPException(404, "unknown model")
     res = _load(d / "results.json") or {}
     graded = (_load(d / "graded.json") or {}).get("per_instance", {})
@@ -111,6 +135,7 @@ def instances(model_dir: str) -> dict:
             "applied": bool(r.get("applied")),
             "gold_rank": r.get("gold_retrieved_rank"),
             "guided": bool(r.get("guided_retrieval")),
+            "loop_green": r.get("loop_green"),  # loop rows only; None elsewhere
             "error": r.get("error"),
             "cost_usd": r.get("cost_usd", 0.0),
         })
@@ -120,7 +145,9 @@ def instances(model_dir: str) -> dict:
 
 @app.get("/api/results/{model_dir}/instances/{instance_id}")
 def instance_detail(model_dir: str, instance_id: str) -> dict:
-    d = SINGLESHOT / model_dir
+    d = _resolve_dir(model_dir)
+    if d is None:
+        raise HTTPException(404, "unknown model")
     res = _load(d / "results.json") or {}
     for r in res.get("rows", []):
         if r["instance_id"] == instance_id:
@@ -136,6 +163,9 @@ def instance_detail(model_dir: str, instance_id: str) -> dict:
                 "graded": instance_id in graded,
                 "tokens": {"in": r.get("input_tokens"), "out": r.get("output_tokens")},
                 "cost_usd": r.get("cost_usd", 0.0),
+                # Loop rows carry their trajectory; single-shot rows have neither.
+                "loop_green": r.get("loop_green"),
+                "trajectory": r.get("trajectory"),
             }
     raise HTTPException(404, "unknown instance")
 
