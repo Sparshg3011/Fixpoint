@@ -33,8 +33,9 @@ from fixpoint.diary import Diary
 from fixpoint.eval import lite_subset
 from fixpoint.eval.images import image_key
 from fixpoint.eval.recall import first_hit_rank, gold_files
+from fixpoint.eval.singleshot import git_apply_check
 from fixpoint.retrieval import load_corpus, tree_at
-from fixpoint.retrieval.bm25 import BM25Searcher
+from fixpoint.retrieval.rank import ranked_files
 
 BASE_OUT = Path(__file__).resolve().parent.parent / "data" / "loop"
 
@@ -56,18 +57,23 @@ def run_one(inst: Instance, k: int, attempts: int, model: str) -> dict:
     # One diary per run: the UI renders these events live (SSE) and as replay.
     diary = Diary(run_id=f"{inst.instance_id}-{int(time.time())}", instance_id=inst.instance_id)
     diary.record("retrieval", "started", query_chars=len(av.problem_statement))
-    docs = load_corpus(tree_at(inst.repo, inst.base_commit))
+    tree = tree_at(inst.repo, inst.base_commit)
+    docs = load_corpus(tree)
     by_path = {d.path: d.text for d in docs}
-    ranked = [p for p, _ in BM25Searcher(docs).search(av.problem_statement, k=k)]
+    ranked = ranked_files(docs, av.problem_statement, k=k)
     files = {p: by_path[p] for p in ranked}
     diary.record("retrieval", "succeeded", files=ranked, corpus_size=len(docs))
 
     result = solve(av.problem_statement, files, image_key(inst), inst.base_commit,
-                   max_attempts=attempts, model=model, diary=diary)
+                   max_attempts=attempts, model=model, diary=diary, corpus=by_path)
     gold = list(gold_files(inst))
     return {
         "instance_id": inst.instance_id,
         "diff": result.diff,
+        # Same real `git apply --check` as single-shot rows, so the scoreboard's
+        # apply column means one thing across modes. (The sandbox applies the
+        # patch too, but the broken-compass path returns a diff it never ran.)
+        "applied": bool(result.diff) and git_apply_check(tree, result.diff),
         "loop_green": result.green,
         "reproducer_valid": result.reproducer_valid,
         "attempts": result.attempts,
