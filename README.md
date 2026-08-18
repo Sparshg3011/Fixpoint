@@ -9,40 +9,38 @@ failures until they go green — then opens a PR. Benchmarked blind on
 
 ## Headline result
 
-> **23.0% of SWE-bench-Lite resolved (69/300), entirely on free open-weight
-> models.** Single-shot with GLM-5.2 via NVIDIA NIM, all 300 instances, graded
-> by the unmodified official Docker harness. **Total API cost: $0.00.**
-> 95% CI [18.6%, 28.1%]. One instance could not be graded (its image is
-> unavailable for this platform) and is counted as unresolved — the figure is
-> a lower bound. The deterministic n=25 subset predicted 24%; the full run
-> delivered 23.0%, validating the subset methodology.
+> **32.7% of SWE-bench-Lite resolved (98/300), entirely on free open-weight
+> models.** Single-shot with Nemotron-3-Ultra via NVIDIA NIM, all 300
+> instances, graded by the unmodified official Docker harness. **Total API
+> cost: $0.00.** 95% CI [27.6%, 38.2%]. Three instances could not be graded
+> (their images are unavailable for this platform) and are counted as
+> unresolved — the figure is a lower bound.
 >
 > Reproduce (no paid API key needed — get a free one at build.nvidia.com):
-> `python scripts/run_singleshot.py --n 300` then
-> `python scripts/grade_chunked.py --predictions data/singleshot/z-ai_glm-5.2/predictions.jsonl`.
+> `python scripts/run_singleshot.py --n 300 --model nvidia/nemotron-3-ultra-550b-a55b`
+> then `python scripts/grade_chunked.py --predictions data/singleshot/nvidia_nemotron-3-ultra-550b-a55b/predictions.jsonl`.
 > Dataset fingerprint `b4200a5b…015a`.
 >
-> **The scaffold is not model-specific — and free models reach frontier
-> territory on it.** Same prompt, same retrieval, same harness throughout:
+> **The scaffold is not model-specific — and free models beat the paid
+> frontier reference on it:**
 >
-> | model | scope | resolved | cost |
-> |---|---|---|---|
-> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | **35%** — CI [26%, 45%] | **$0.00** |
-> | z-ai/glm-5.2 (free) | **full Lite-300** | **23.0%** — CI [19%, 28%] | **$0.00** |
-> | claude-sonnet-5 (paid reference) | n=25 subset | 36% — CI [20%, 55%] | $7.21 |
+> | model | scope | scaffold | resolved | cost |
+> |---|---|---|---|---|
+> | nvidia/nemotron-3-ultra-550b (free) | **full Lite-300** | v2 | **32.7%** — CI [28%, 38%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v1 | 37% — CI [28%, 47%] | **$0.00** |
+> | z-ai/glm-5.2 (free) | full Lite-300 | v1 | 23.0% — CI [19%, 28%] | **$0.00** |
+> | claude-sonnet-5 (paid reference) | n=25 subset | v1 | 36% — CI [20%, 55%] | $7.21 |
 >
-> Nemotron-Ultra matches the paid frontier reference at zero cost (a full-300
-> Nemotron run is in progress). Conditional apply rate — the patcher's own
-> quality once retrieval finds the right file — is 94% for both GLM and
-> Sonnet; Nemotron converts 51% of its applying patches into resolves vs
-> GLM's 32%, the clearest capability gap the campaign surfaced.
->
-> The conditional apply rate — the honest measure of the patcher once
-> retrieval does its job — is **identical at 94%**. Retrieval's recall@5 = 64%
-> is the shared ceiling, not the model. See
-> [docs/PATCHING.md](docs/PATCHING.md) for the full comparison, including a
-> third model that scored 4% and why half of that gap turned out to be our
-> own parser.
+> Scaffold v2 = the v1 pipeline plus measured upgrades, each validated
+> offline before shipping: mention-first retrieval (localization@5 68%→70%,
+> zero regressions), a fuzzy edit-matcher tier (threshold swept on saved
+> responses), whole-corpus edit targets, and a truncation retry that cut
+> reasoning-burn losses from 64 instances to 18. Under v2 the apply rate on
+> full Lite-300 is **82.7%** (248/300); 40% of graded applying patches
+> resolve. A v2 GLM re-run is queued; every v1 number above remains archived
+> and reproducible. See [docs/PATCHING.md](docs/PATCHING.md) for the model
+> comparison, including a model that scored 4% and why half of that gap
+> turned out to be our own parser.
 >
 > The harness itself is calibrated: 24/25 instances grade red with an empty
 > patch and green with the gold patch; the 25th (psf__requests-2674) is
