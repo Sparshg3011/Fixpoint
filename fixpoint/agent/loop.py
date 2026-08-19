@@ -109,6 +109,14 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
 
     # 2b. Bounded attempt loop (reproducer is trustworthy here). Attempt 1 is
     #     fresh; later attempts replan from the previous reproducer failure.
+    #
+    #     Best-diff policy, measured not guessed: a green diff wins outright;
+    #     otherwise the FIRST diff that applied in the sandbox is kept, never
+    #     the latest. The loop-100 campaign scored 41/100 keeping the latest
+    #     attempt while same-scaffold single-shot scored 44/100 on the same
+    #     instances — when the reproducer rejects a patch it cannot actually
+    #     judge, a feedback retry is a blind reroll, and blind rerolls lose
+    #     to first answers.
     best_diff = ""
     feedback: str | None = None
     green = False
@@ -125,7 +133,6 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
                 diary.record("developer", "failed", attempt=attempt, error=patch.error)
             feedback = f"You produced no applicable edits: {patch.error}. Re-read the files and try again."
             continue
-        best_diff = patch.diff  # keep the latest applicable diff as our best effort
 
         if diary:
             diary.record("developer", "succeeded", attempt=attempt, diff=patch.diff)
@@ -138,8 +145,11 @@ def solve(problem_statement: str, files: dict[str, str], image: str, base_commit
                          f"#{attempt}: applied={repro.applied} reproducer_exit={repro.exit_code}",
                          green=repro.green))
         if repro.green:  # trustworthy: the reproducer went red on base
+            best_diff = patch.diff
             green = True
             break
+        if not best_diff and (repro.applied or not patch.error):
+            best_diff = patch.diff  # first applying diff stands unless green beats it
         feedback = _feedback(patch.diff, repro)
 
     traj.append(Step("result", f"green={green} after {attempt} attempt(s)", green=green))

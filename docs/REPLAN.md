@@ -57,3 +57,35 @@ needs live model calls to exercise end to end — pending API credits. Once
 credits are topped up: run the loop over the subset, then compare
 attempts-vs-resolve and loop-green-vs-RESOLVED against the single-shot
 baseline.
+
+## Loop campaign #1: nemotron-ultra, n=100 (2026-08-18)
+
+First full-scale loop measurement, graded chunk-by-chunk by the official
+harness as it ran:
+
+| metric | value |
+|---|---|
+| generated | 100/100 (resumed across a Docker Hub rate-limit outage) |
+| reproducer valid (red-on-base) | 69/100 |
+| loop-green | 32/100 |
+| loop-green precision | **24/32 resolved = 75%** |
+| RESOLVED | 41/100 |
+| same-scaffold single-shot, same instances | **44/100** |
+
+Two findings, one pleasant and one not:
+
+**The reward signal works.** 75% of the loop's self-declared greens resolved
+on the hidden graded tests — a signal built from nothing but the issue text
+and a self-written reproducer, never seeing FAIL_TO_PASS. The false-green
+guard (red-on-base validation) is what keeps that number honest.
+
+**The search policy lost to the signal's blind spots.** The loop kept the
+LATEST applicable diff. On the 37 instances where the reproducer was valid
+but no attempt went green, that meant a correct first patch could be
+overwritten by a blind retry — the reproducer said "still red" but its red
+was wrong (imperfect reproducers reject good patches too). Net effect:
+-3 resolves vs simply keeping the first answer. Policy changed to
+keep-the-first-applying-diff (green still wins outright), pinned by
+test_red_attempts_keep_the_first_applying_diff. The deeper lesson for any
+agent loop: feedback iteration only adds value when the verifier can actually
+grade the thing being iterated — otherwise it's a reroll with extra steps.

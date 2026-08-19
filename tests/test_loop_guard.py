@@ -118,3 +118,35 @@ def test_loop_uses_prompt_cache_on_every_attempt(monkeypatch, fakes):
     wire_sandbox(monkeypatch, base_exit=1, patched_exit=1, calls=fakes)
     solve()
     assert fakes["patch_cache"] == [True, True, True]
+
+
+def test_red_attempts_keep_the_first_applying_diff(monkeypatch):
+    """Measured on the loop-100 campaign: keeping the LATEST attempt scored
+    41/100 while same-scaffold single-shot scored 44/100 on the same
+    instances. When no attempt goes green the reproducer proved nothing about
+    later attempts being better — the first applying diff must stand."""
+    diffs = [
+        "diff --git a/m.py b/m.py\n--- a/m.py\n+++ b/m.py\n@@ -1 +1 @@\n-a\n+first\n",
+        "diff --git a/m.py b/m.py\n--- a/m.py\n+++ b/m.py\n@@ -1 +1 @@\n-a\n+second\n",
+        "diff --git a/m.py b/m.py\n--- a/m.py\n+++ b/m.py\n@@ -1 +1 @@\n-a\n+third\n",
+    ]
+    seq = iter(diffs)
+
+    def fake_reproducer(problem_statement, files, *, model=None):
+        return "print('repro')\n", _llm()
+
+    def fake_patch(problem_statement, files, *, model=None, feedback=None, cache=False,
+                   corpus=None):
+        return PatchResult(diff=next(seq), edits=[], llm=_llm(), error=None)
+
+    def fake_run(image, base_commit, patch="", script="", **kw):
+        # red on base (exit 1) -> reproducer valid; every attempt applies but
+        # stays red -> no attempt ever earns the right to replace the first.
+        return ReproResult(applied=True, exit_code=1, green=False, output="exit 1")
+
+    monkeypatch.setattr(loop_mod, "generate_reproducer", fake_reproducer)
+    monkeypatch.setattr(loop_mod, "generate_patch", fake_patch)
+    monkeypatch.setattr(loop_mod, "run_reproducer", fake_run)
+    result = loop_mod.solve("issue", {"m.py": "a\n"}, "img", "abc123", max_attempts=3)
+    assert result.attempts == 3 and result.green is False
+    assert "+first" in result.diff  # not "+third"

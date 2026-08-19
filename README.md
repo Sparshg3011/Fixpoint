@@ -26,10 +26,12 @@ failures until they go green — then opens a PR. Benchmarked blind on
 >
 > | model | scope | scaffold | resolved | cost |
 > |---|---|---|---|---|
-> | nvidia/nemotron-3-ultra-550b (free) | **full Lite-300** | v2 | **32.7%** — CI [28%, 38%] | **$0.00** |
-> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v1 | 37% — CI [28%, 47%] | **$0.00** |
-> | z-ai/glm-5.2 (free) | full Lite-300 | v1 | 23.0% — CI [19%, 28%] | **$0.00** |
-> | claude-sonnet-5 (paid reference) | n=25 subset | v1 | 36% — CI [20%, 55%] | $7.21 |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v2 single-shot | **44%** — CI [35%, 54%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | **full Lite-300** | v2 single-shot | **32.7%** — CI [28%, 38%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v2 + replan loop | 41% — CI [32%, 51%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v1 single-shot | 37% — CI [28%, 47%] | **$0.00** |
+> | z-ai/glm-5.2 (free) | full Lite-300 | v1 single-shot | 23.0% — CI [19%, 28%] | **$0.00** |
+> | claude-sonnet-5 (paid reference) | n=25 subset | v1 single-shot | 36% — CI [20%, 55%] | $7.21 |
 >
 > Scaffold v2 = the v1 pipeline plus measured upgrades, each validated
 > offline before shipping: mention-first retrieval (localization@5 68%→70%,
@@ -41,6 +43,16 @@ failures until they go green — then opens a PR. Benchmarked blind on
 > and reproducible. See [docs/PATCHING.md](docs/PATCHING.md) for the model
 > comparison, including a model that scored 4% and why half of that gap
 > turned out to be our own parser.
+>
+> **The loop row is a negative result, reported because it's true**: on the
+> same 100 instances with the same scaffold, the replan loop scored 41 where
+> single-shot scored 44. The loop's own green signal was excellent when it
+> fired — 24 of its 32 greens resolved (75% precision, with zero access to
+> the graded tests) — but its keep-the-latest-attempt policy meant that
+> whenever the reproducer couldn't judge a patch, a blind retry could
+> overwrite a correct first answer. The policy is now keep-the-first (a
+> regression test pins it), and the re-measurement is queued. See
+> [docs/REPLAN.md](docs/REPLAN.md).
 >
 > The harness itself is calibrated: 24/25 instances grade red with an empty
 > patch and green with the gold patch; the 25th (psf__requests-2674) is
