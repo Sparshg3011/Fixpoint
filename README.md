@@ -51,8 +51,12 @@ failures until they go green — then opens a PR. Benchmarked blind on
 > the graded tests) — but its keep-the-latest-attempt policy meant that
 > whenever the reproducer couldn't judge a patch, a blind retry could
 > overwrite a correct first answer. The policy is now keep-the-first (a
-> regression test pins it), and the re-measurement is queued. See
-> [docs/REPLAN.md](docs/REPLAN.md).
+> regression test pins it) — and the fix is already measured, without an API
+> call: swapping in each instance's first diff from the saved diaries and
+> regrading the 26 that changed scores **43/100**, recovering two of the
+> three lost points. At current reproducer quality (69% go red-on-base) the
+> loop ties single-shot; better reproducers, not more retries, are the next
+> lever. See [docs/REPLAN.md](docs/REPLAN.md).
 >
 > The harness itself is calibrated: 24/25 instances grade red with an empty
 > patch and green with the gold patch; the 25th (psf__requests-2674) is

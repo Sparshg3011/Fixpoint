@@ -89,3 +89,25 @@ keep-the-first-applying-diff (green still wins outright), pinned by
 test_red_attempts_keep_the_first_applying_diff. The deeper lesson for any
 agent loop: feedback iteration only adds value when the verifier can actually
 grade the thing being iterated — otherwise it's a reroll with extra steps.
+
+### Keep-first, measured (2026-08-19)
+
+The policy change was graded the cheap way: every attempt's diff already
+lives in the run diaries, so `scripts/regrade_keepfirst.py` swaps in each
+instance's first applying diff, regrades only the 26 instances whose patch
+actually changed, and carries every other verdict over untouched. Zero API
+calls, ~1h of Docker.
+
+| policy | resolved |
+|---|---|
+| keep latest attempt (as campaigned) | 41/100 |
+| **keep first applying diff** | **43/100** |
+| single-shot, same scaffold, same instances | 44/100 |
+
+Keep-first recovered two of the three lost points; the remaining gap to
+single-shot is one instance — noise. Conclusion, stated precisely: with a
+reproducer that goes red-on-base 69% of the time and judges greens at 75%
+precision, the replan loop neither beats nor loses to single-shot on resolve
+rate — what it adds is the 75%-precise green signal itself (which a PR
+pipeline can use to decide what to open). The lever that would let the loop
+PULL AHEAD is reproducer quality, not retry count.
