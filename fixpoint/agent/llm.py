@@ -128,8 +128,27 @@ def _drain_sse(lines) -> tuple[str, dict, str]:
     return "".join(parts), usage, finish
 
 
-def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: int,
-                            base_url: str, max_retries: int = 9) -> LLMResult:
+def chat(system: str, messages: list[dict], *, model: str = DEFAULT_MODEL,
+         max_tokens: int | None = None) -> LLMResult:
+    """One turn of a multi-turn conversation — the bash agent's primitive.
+
+    `messages` is the running transcript ([{role, content}, ...]); the caller
+    owns it and appends both sides after each turn. Rides the same streaming/
+    retry/budget machinery as call(). OpenAI-compatible backends only: the
+    interactive agent exists to drive free open-weight endpoints, and single
+    calls remain available for everything else.
+    """
+    if BACKEND != "openai":
+        raise RuntimeError("chat() requires FIXPOINT_BACKEND=openai")
+    return _call_openai_compatible(
+        system, messages, model=model,
+        max_tokens=max_tokens if max_tokens is not None else DEFAULT_MAX_TOKENS,
+        base_url=BASE_URL)
+
+
+def _call_openai_compatible(system: str, user: str | list[dict], *, model: str,
+                            max_tokens: int, base_url: str,
+                            max_retries: int = 9) -> LLMResult:
     """One /chat/completions call against any OpenAI-compatible endpoint.
 
     Uses httpx directly (already present via the anthropic SDK) rather than
@@ -161,6 +180,9 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
     if not base_url:
         raise RuntimeError("FIXPOINT_BACKEND=openai needs FIXPOINT_BASE_URL set")
 
+    # `user` is either a single user turn (str) or a whole running transcript
+    # (list of {role, content}) from chat().
+    turns = user if isinstance(user, list) else [{"role": "user", "content": user}]
     payload = {
         "model": model,
         "max_tokens": max_tokens,
@@ -168,8 +190,7 @@ def _call_openai_compatible(system: str, user: str, *, model: str, max_tokens: i
         # Ask for token counts on the final chunk; servers that predate this
         # option 400 on it and we fall back to non-streaming below.
         "stream_options": {"include_usage": True},
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
+        "messages": [{"role": "system", "content": system}, *turns],
     }
     headers = {"Content-Type": "application/json"}
     if key:  # a local Ollama server needs no key
