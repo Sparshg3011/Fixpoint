@@ -30,6 +30,7 @@ from fixpoint.diary import EVENTS, STAGES, read
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SINGLESHOT = REPO_ROOT / "data" / "singleshot"
 LOOP = REPO_ROOT / "data" / "loop"
+SHELL = REPO_ROOT / "data" / "shell"
 CALIBRATION = REPO_ROOT / "data" / "calibration"
 RUNS = REPO_ROOT / "runs"
 WEB = REPO_ROOT / "web"
@@ -49,7 +50,7 @@ def _model_dirs() -> list[tuple[str, Path]]:
     single-shot (one attempt, no execution feedback) and loop (reproducer-driven
     replan) — the scoreboard must say which is which, they are different claims."""
     out: list[tuple[str, Path]] = []
-    for mode, root in (("single-shot", SINGLESHOT), ("loop", LOOP)):
+    for mode, root in (("single-shot", SINGLESHOT), ("loop", LOOP), ("shell", SHELL)):
         if root.exists():
             # Only direct children; archives (e.g. n100-archive) nest deeper on purpose.
             out.extend((mode, d) for d in sorted(root.iterdir()) if d.is_dir())
@@ -65,9 +66,9 @@ def _resolve_dir(model_dir: str) -> Path | None:
     BEFORE touching the filesystem — a lexical parent check alone is
     bypassable ('loop:..' has parent == root without ever resolving)."""
     mode, _, name = model_dir.rpartition(":")
-    if mode not in ("", "loop") or not _DIR_NAME_RE.fullmatch(name) or ".." in name:
+    if mode not in ("", "loop", "shell") or not _DIR_NAME_RE.fullmatch(name) or ".." in name:
         return None
-    root = LOOP if mode == "loop" else SINGLESHOT
+    root = {"loop": LOOP, "shell": SHELL}.get(mode, SINGLESHOT)
     d = root / name
     return d if d.is_dir() else None
 
@@ -93,7 +94,7 @@ def results() -> dict:
         row = {
             "model": (res or {}).get("model") or (graded or {}).get("model") or d.name,
             "mode": mode,
-            "dir": d.name if mode == "single-shot" else f"loop:{d.name}",
+            "dir": d.name if mode == "single-shot" else f"{mode}:{d.name}",
             "n": n,
             "generated": len(rows),
             "applied": applied,

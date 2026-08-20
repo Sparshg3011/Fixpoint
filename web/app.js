@@ -76,9 +76,13 @@ async function showResults() {
 
   const funnel = (m) => {
     const f = (x) => (m.n ? Math.round((x / m.n) * 100) : 0);
-    return `<div class="funnel" title="localized ${m.localized} · applied ${m.applied} · resolved ${m.resolved} of ${m.n}">
-      <span class="f-loc" style="width:${f(m.localized)}%"></span>
-      <span class="f-app" style="width:${f(m.applied)}%"></span>
+    // Shell mode has no retrieval stage — the agent localizes inside the
+    // container — so a localization segment would be a lie by chart.
+    const loc = m.mode === "shell" ? "" :
+      `<span class="f-loc" style="width:${f(m.localized)}%"></span>`;
+    const locTitle = m.mode === "shell" ? "" : `localized ${m.localized} · `;
+    return `<div class="funnel" title="${locTitle}applied ${m.applied} · resolved ${m.resolved} of ${m.n}">
+      ${loc}<span class="f-app" style="width:${f(m.applied)}%"></span>
       <span class="f-res" style="width:${f(m.resolved)}%"></span></div>`;
   };
 
@@ -87,8 +91,9 @@ async function showResults() {
     <p class="muted" style="margin:0 0 22px">Resolve rates on SWE-bench-Lite,
       graded by the unmodified official Docker harness. <b>1-shot</b> rows are one
       attempt with no execution feedback; <b>loop</b> rows replan against the agent's
-      own reproducer. Every row is read live from artifacts on disk — nothing on
-      this page is hardcoded.</p>
+      own reproducer; <b>shell</b> rows are the interactive bash agent working
+      inside the instance container. Every row is read live from artifacts on
+      disk — nothing on this page is hardcoded.</p>
     <div class="hero">
       <div class="stat stat-hero">
         <span class="k">best resolve rate — ${esc(shortModel(head.model))} (${esc(head.mode)})</span>
@@ -114,7 +119,9 @@ async function showResults() {
           ${models.map((m) => `
             <tr data-dir="${esc(m.dir)}">
               <td class="mono">${esc(shortModel(m.model))}
-                ${m.mode === "loop"
+                ${m.mode === "shell"
+                  ? '<span class="chip chip-green" title="interactive bash agent: explores, edits, and tests inside the container">shell</span>'
+                  : m.mode === "loop"
                   ? '<span class="chip chip-accent" title="reproducer-driven replan loop with execution feedback">loop</span>'
                   : '<span class="chip chip-dim" title="one attempt, no execution feedback">1-shot</span>'}</td>
               <td class="num">n=${m.n}</td>
