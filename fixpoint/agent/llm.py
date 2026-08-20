@@ -233,8 +233,14 @@ def _call_openai_compatible(system: str, user: str | list[dict], *, model: str,
                     payload.pop("stream", None)
                     payload.pop("stream_options", None)
                     continue
-                if not (resp.status_code == 429 or resp.status_code >= 500):
-                    break  # 4xx other than 429 will not fix itself
+                # Retryable: 429 (throttling), 5xx (server), and 404 — which on
+                # a free NIM tier is usually "the model is being cycled out of
+                # capacity right now", not "this model does not exist". A truly
+                # wrong model id costs the bounded retry ladder once per run,
+                # a price worth paying to survive the transient kind (measured:
+                # 8 consecutive instances lost to one 404 window mid-campaign).
+                if not (resp.status_code in (404, 429) or resp.status_code >= 500):
+                    break  # other 4xx will not fix itself
                 hinted = resp.headers.get("retry-after")
                 try:
                     delay = min(float(hinted), _MAX_BACKOFF_S)

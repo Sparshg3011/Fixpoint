@@ -55,6 +55,7 @@ def client(tmp_path, monkeypatch):
         "graded": 1, "resolved": 1, "per_instance": {"r__r-1": True}}))
     monkeypatch.setattr(srv, "SINGLESHOT", tmp_path / "singleshot")
     monkeypatch.setattr(srv, "LOOP", tmp_path / "loop")
+    monkeypatch.setattr(srv, "SHELL", tmp_path / "shell")  # real data must not leak in
     monkeypatch.setattr(srv, "RUNS", tmp_path / "runs")
     monkeypatch.setattr(srv, "CALIBRATION", tmp_path / "calibration")
     return TestClient(srv.app)
