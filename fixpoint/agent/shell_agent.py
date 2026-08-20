@@ -159,15 +159,6 @@ def solve_in_shell(problem_statement: str, image: str, base_commit: str, *,
                 if step >= 4:
                     observation += (f"\nIf your fix is already made and verified, submit NOW "
                                     f"with:\n```bash\necho {SUBMIT_SENTINEL}\n```")
-                # Wander guard: 4 of 25 first-campaign transcripts explored for
-                # the entire budget without EVER editing a file — an agent that
-                # produces no diff scores zero with certainty. Past the halfway
-                # mark, an empty diff earns an explicit course correction.
-                if step == max_steps // 2 and not shell.diff().strip():
-                    observation += ("\nWARNING: you are halfway through your budget and have "
-                                    "not modified any file yet. Commit to the most likely "
-                                    "root cause NOW and make the edit — an imperfect fix "
-                                    "beats no fix.")
                 messages.append({"role": "user", "content": observation})
 
             # Budget exhausted: whatever is edited so far is the best effort.
