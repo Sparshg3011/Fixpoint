@@ -28,7 +28,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from fixpoint.agent.llm import DEFAULT_MODEL, chat
+from fixpoint.agent.llm import DEFAULT_MAX_TOKENS, DEFAULT_MODEL, chat
 from fixpoint.diary import Diary
 from fixpoint.harness.interactive import ShellSession
 
@@ -121,6 +121,19 @@ def solve_in_shell(problem_statement: str, image: str, base_commit: str, *,
             for step in range(1, max_steps + 1):
                 reply = chat(SYSTEM, messages, model=model)
                 cost += reply.cost_usd
+                # An EMPTY reply is the endpoint failing, not the agent
+                # deciding — measured: 19 of 20 "protocol drift" deaths in the
+                # n=100 campaign were the congested free tier returning nothing
+                # (or burning the whole budget on reasoning). Retry the turn;
+                # double the budget when truncation was the stated reason.
+                empty_retries = 0
+                while not reply.text.strip() and empty_retries < 3:
+                    empty_retries += 1
+                    time.sleep(min(15 * empty_retries, 45))
+                    reply = chat(SYSTEM, messages, model=model,
+                                 max_tokens=(DEFAULT_MAX_TOKENS * 2
+                                             if reply.finish_reason == "length" else None))
+                    cost += reply.cost_usd
                 messages.append({"role": "assistant", "content": reply.text})
 
                 command = _extract_command(reply.text)

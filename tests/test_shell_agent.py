@@ -65,3 +65,21 @@ def test_step_budget_returns_best_effort_diff(monkeypatch):
     assert r.submitted is False and r.steps == 4
     assert r.error == "step budget exhausted"
     assert r.diff  # edits made before the budget ran out still count
+
+
+def test_empty_replies_are_retried_not_blamed(monkeypatch):
+    """Measured on the n=100 campaign: 19 of 20 'protocol drift' deaths were
+    the endpoint returning EMPTY text. That is weather — retry the turn; the
+    nudge path is reserved for real replies that lack a fence."""
+    replies = iter([
+        _llm(""),                                # endpoint gave nothing
+        _llm(""),                                # again
+        _llm("```bash\ngrep -rn bug .\n```"),    # recovered
+        _llm(f"```bash\necho {sa.SUBMIT_SENTINEL}\n```"),
+    ])
+    monkeypatch.setattr(sa, "chat", lambda *a, **kw: next(replies))
+    monkeypatch.setattr(sa, "ShellSession", FakeShell)
+    monkeypatch.setattr(sa.time, "sleep", lambda s: None)
+    r = sa.solve_in_shell("issue", "img", "abc123")
+    assert r.submitted is True
+    assert r.error is None  # empty replies never counted as protocol failures
