@@ -64,12 +64,22 @@ def load_checkpoint(path: Path, steps: int) -> dict[str, dict]:
     return rows
 
 
+class RateLimited(Exception):
+    """The endpoint refused before the agent did anything. Not a data point."""
+
+
 def run_one(inst: Instance, steps: int, model: str, transcripts: Path) -> dict:
     av = agent_view(inst)  # firewall: issue text only
     diary = Diary(run_id=f"{inst.instance_id}-shell-{int(time.time())}",
                   instance_id=inst.instance_id)
     r = solve_in_shell(av.problem_statement, image_key(inst), inst.base_commit,
                        model=model, max_steps=steps, diary=diary)
+    # A quota death before the first step says nothing about this instance.
+    # Recording it would poison the checkpoint (measured: an entire Kimi n=25
+    # campaign persisted as 25 empty rows during one 429 window). Raise so the
+    # campaign treats it as weather.
+    if r.steps == 0 and any(code in (r.error or "") for code in ("429", "404", "410")):
+        raise RateLimited(r.error)
     transcripts.mkdir(parents=True, exist_ok=True)
     (transcripts / f"{inst.instance_id}.json").write_text(
         json.dumps(r.transcript, indent=1))
@@ -164,26 +174,49 @@ def main() -> int:
         print(f"  pre-pulled {pulled}/{len(chunk)} images"
               + (f" ({failed} unavailable)" if failed else ""), flush=True)
 
-        with ThreadPoolExecutor(max_workers=args.workers) as pool, \
-                ckpt_path.open("a") as ckpt:
-            futures = {pool.submit(run_one, by_id[iid], args.steps, args.model,
-                                   transcripts): iid for iid in todo}
-            try:
-                for fut in as_completed(futures):
-                    iid = futures[fut]
-                    try:
-                        row = rows[iid] = fut.result()
-                    except Exception as e:
-                        print(f"  ! {iid}: {type(e).__name__}: {e}", flush=True)
-                        continue
-                    ckpt.write(json.dumps({"steps_budget": args.steps, "row": row}) + "\n")
-                    ckpt.flush()
-                    print(f"  {iid}: submitted={row['submitted']} steps={row['steps']} "
-                          f"applied={row['applied']}", flush=True)
-            except KeyboardInterrupt:
-                pool.shutdown(wait=False, cancel_futures=True)
-                persist()
-                raise
+        # Circuit breaker: consecutive rate-limit deaths mean the QUOTA is
+        # gone, not the instances — pressing on just converts the whole
+        # campaign into a failure log. Two strikes pauses everything for half
+        # an hour; the instances stay in todo and retry on the next lap.
+        remaining = list(todo)
+        while remaining:
+            batch, remaining = remaining, []
+            rl_streak = 0
+            with ThreadPoolExecutor(max_workers=args.workers) as pool, \
+                    ckpt_path.open("a") as ckpt:
+                futures = {pool.submit(run_one, by_id[iid], args.steps, args.model,
+                                       transcripts): iid for iid in batch}
+                try:
+                    for fut in as_completed(futures):
+                        iid = futures[fut]
+                        try:
+                            row = rows[iid] = fut.result()
+                        except RateLimited as e:
+                            rl_streak += 1
+                            remaining.append(iid)
+                            print(f"  ~ {iid}: rate-limited, will retry ({e})"[:160],
+                                  flush=True)
+                            continue
+                        except Exception as e:
+                            print(f"  ! {iid}: {type(e).__name__}: {e}", flush=True)
+                            continue
+                        rl_streak = 0
+                        ckpt.write(json.dumps({"steps_budget": args.steps,
+                                               "row": row}) + "\n")
+                        ckpt.flush()
+                        print(f"  {iid}: submitted={row['submitted']} steps={row['steps']} "
+                              f"applied={row['applied']}", flush=True)
+                except KeyboardInterrupt:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    persist()
+                    raise
+            if remaining:
+                if rl_streak >= max(2, args.workers):
+                    print(f"  quota wall ({rl_streak} consecutive) — pausing 30min "
+                          f"with {len(remaining)} instances waiting", flush=True)
+                    time.sleep(1800)
+                else:
+                    time.sleep(60)
 
         persist()
         to_grade = [iid for iid in chunk
