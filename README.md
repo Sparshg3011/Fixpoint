@@ -26,12 +26,20 @@ failures until they go green — then opens a PR. Benchmarked blind on
 >
 > | model | scope | scaffold | resolved | cost |
 > |---|---|---|---|---|
-> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v2 single-shot | **44%** — CI [35%, 54%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | **interactive shell agent** | **47%** — CI [38%, 57%] | **$0.00** |
+> | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v2 single-shot | 44% — CI [35%, 54%] | **$0.00** |
 > | nvidia/nemotron-3-ultra-550b (free) | **full Lite-300** | v2 single-shot | **32.7%** — CI [28%, 38%] | **$0.00** |
 > | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v2 + replan loop | 41% — CI [32%, 51%] | **$0.00** |
 > | nvidia/nemotron-3-ultra-550b (free) | n=100 stratified | v1 single-shot | 37% — CI [28%, 47%] | **$0.00** |
-> | z-ai/glm-5.2 (free) | full Lite-300 | v1 single-shot | 23.0% — CI [19%, 28%] | **$0.00** |
+> | z-ai/glm-5.2 (free, EOL'd by NIM 2026-08-21) | full Lite-300 | v1 single-shot | 23.0% — CI [19%, 28%] | **$0.00** |
 > | claude-sonnet-5 (paid reference) | n=25 subset | v1 single-shot | 36% — CI [20%, 55%] | $7.21 |
+>
+> The shell row is the architecture the current leaderboard runs on: the model
+> works INSIDE the official instance container — greps the repo, edits, runs
+> tests, submits — with no network and git history provably scrubbed of the
+> future (docs/SHELL.md). 66% of its applying patches resolve, because it
+> tests its fixes before we ever see them. 47% at $0 sits in the range of the
+> best open-weight entry on the official Lite leaderboard.
 >
 > Scaffold v2 = the v1 pipeline plus measured upgrades, each validated
 > offline before shipping: mention-first retrieval (localization@5 68%→70%,

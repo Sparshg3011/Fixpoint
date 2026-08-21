@@ -32,3 +32,23 @@ not implicated.)
 
 Both runs' full artifacts are archived (`baseline-v1-archive/`,
 `wander-guard-v2-archive/`) with per-instance transcripts.
+
+## n=100 campaign (nemotron-ultra, 2026-08-21)
+
+| metric | value |
+|---|---|
+| RESOLVED | **47/100 = 47.0%** (CI [37.6%, 56.6%]) |
+| applied | 71 (66% of applying patches resolve) |
+| submitted voluntarily | 24 |
+| same instances, single-shot v2 | 44/100 |
+| same instances, single-shot v1 | 37/100 |
+
+Two infrastructure lessons were paid for and banked along the way. A 429
+storm plus a window where the congested endpoint returned EMPTY replies cost
+29 instances on the first pass (the loop miscounted blank replies as the
+agent breaking protocol — 19 of 20 "drift" deaths were actually the API
+giving nothing). Fixes: empty replies retry at the turn level, and quota
+deaths are never recorded as rows at all — a campaign that hits a quota wall
+now pauses itself rather than logging failures that say nothing about the
+instances. The recovery run regenerated exactly those 29 and the score moved
+35 -> 47 without touching the agent.
