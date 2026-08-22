@@ -124,7 +124,8 @@ async function showResults() {
                   : m.mode === "loop"
                   ? '<span class="chip chip-accent" title="reproducer-driven replan loop with execution feedback">loop</span>'
                   : '<span class="chip chip-dim" title="one attempt, no execution feedback">1-shot</span>'}</td>
-              <td class="num">n=${m.n}</td>
+              <td class="num">n=${m.n}${m.dataset === "verified"
+                ? ' <span class="chip chip-amber" title="SWE-bench Verified (500, human-filtered) — the live 2026 board">verified</span>' : ""}</td>
               <td>${funnel(m)}</td>
               <td class="num">${pct(m.apply_rate)}</td>
               <td class="num"><span class="chip ${m.resolve_rate ? "chip-green" : "chip-dim"}">${pct(m.resolve_rate)}</span></td>

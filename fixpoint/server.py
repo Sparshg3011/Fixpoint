@@ -94,6 +94,7 @@ def results() -> dict:
         row = {
             "model": (res or {}).get("model") or (graded or {}).get("model") or d.name,
             "mode": mode,
+            "dataset": (res or {}).get("dataset", "lite"),
             "dir": d.name if mode == "single-shot" else f"{mode}:{d.name}",
             "n": n,
             "generated": len(rows),

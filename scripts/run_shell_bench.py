@@ -33,7 +33,14 @@ from run_loop_bench import atomic_write  # noqa: E402
 from fixpoint.agent.llm import DEFAULT_MODEL  # noqa: E402
 from fixpoint.agent.secrets import require_api_key  # noqa: E402
 from fixpoint.agent.shell_agent import solve_in_shell  # noqa: E402
-from fixpoint.bench import Instance, agent_view, load_lite  # noqa: E402
+from fixpoint.bench import (  # noqa: E402
+    DATASET_NAME,
+    VERIFIED_DATASET_NAME,
+    Instance,
+    agent_view,
+    load_lite,
+    load_verified,
+)
 from fixpoint.diary import Diary  # noqa: E402
 from fixpoint.eval import lite_subset  # noqa: E402
 from fixpoint.eval.chunking import DEFAULT_PRUNE_THRESHOLD_GB, plan_chunks  # noqa: E402
@@ -45,8 +52,11 @@ from fixpoint.retrieval import tree_at  # noqa: E402
 BASE_OUT = Path(__file__).resolve().parent.parent / "data" / "shell"
 
 
-def out_dir(model: str) -> Path:
-    return BASE_OUT / model.replace("/", "_").replace(":", "_")
+def out_dir(model: str, dataset: str = "lite") -> Path:
+    """Lite and Verified campaigns must never share artifacts — same model,
+    different benchmark, different claim."""
+    safe = model.replace("/", "_").replace(":", "_")
+    return BASE_OUT / (safe if dataset == "lite" else f"{safe}__{dataset}")
 
 
 def load_checkpoint(path: Path, steps: int) -> dict[str, dict]:
@@ -99,16 +109,20 @@ def main() -> int:
     ap.add_argument("--grade-workers", type=int, default=4)
     ap.add_argument("--chunk-size", type=int, default=12)
     ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--dataset", default="lite", choices=["lite", "verified"])
     ap.add_argument("--namespace", default="swebench", choices=["swebench", "none"])
     ap.add_argument("--prune-threshold-gb", type=float, default=DEFAULT_PRUNE_THRESHOLD_GB)
     args = ap.parse_args()
 
     require_api_key()
-    instances = lite_subset(load_lite(), args.n)
+    load = load_lite if args.dataset == "lite" else load_verified
+    dataset_name = DATASET_NAME if args.dataset == "lite" else VERIFIED_DATASET_NAME
+    all_instances = load()
+    instances = lite_subset(all_instances, args.n)  # proportional-by-repo on any list
     by_id = {i.instance_id: i for i in instances}
-    meta = {i.instance_id: (i.repo, i.version) for i in load_lite()}
+    meta = {i.instance_id: (i.repo, i.version) for i in all_instances}
 
-    OUT = out_dir(args.model)
+    OUT = out_dir(args.model, args.dataset)
     OUT.mkdir(parents=True, exist_ok=True)
     ckpt_path, preds_path, graded_path = (OUT / "checkpoint.jsonl",
                                           OUT / "predictions.jsonl", OUT / "graded.json")
@@ -153,7 +167,8 @@ def main() -> int:
             "graded": len(graded), "resolved": sum(graded.values()),
             "per_instance": graded}, indent=2))
         atomic_write(OUT / "results.json", json.dumps({
-            "model": args.model, "mode": "shell", "n": len(instances),
+            "model": args.model, "mode": "shell", "dataset": args.dataset,
+            "n": len(instances),
             "steps_budget": args.steps,
             "submitted": sum(1 for r in ordered if r.get("submitted")),
             "total_cost_usd": round(sum(r.get("cost_usd", 0.0) for r in ordered), 4),
@@ -170,7 +185,7 @@ def main() -> int:
             continue
         print(f"\nchunk {ci}/{len(chunks)} ({len(chunk)} instances, {len(todo)} to generate)",
               flush=True)
-        pulled, failed = prepull(chunk, args.namespace)
+        pulled, failed = prepull(chunk, args.namespace, instances=all_instances)
         print(f"  pre-pulled {pulled}/{len(chunk)} images"
               + (f" ({failed} unavailable)" if failed else ""), flush=True)
 
@@ -225,7 +240,8 @@ def main() -> int:
             run_id = f"{base}-c{ci}"
             try:
                 run_official_eval(preds_path, run_id=run_id, instance_ids=to_grade,
-                                  namespace=args.namespace, max_workers=args.grade_workers)
+                                  dataset=dataset_name, namespace=args.namespace,
+                                  max_workers=args.grade_workers)
             except subprocess.CalledProcessError as e:
                 print(f"  harness exited nonzero ({e.returncode}) — reading what it wrote",
                       flush=True)

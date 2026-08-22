@@ -27,6 +27,11 @@ from datasets import load_dataset
 # The dataset moved orgs on the HF Hub (princeton-nlp -> SWE-bench). The old
 # name still resolves and is the one every published paper cites, so we keep it.
 DATASET_NAME = "princeton-nlp/SWE-bench_Lite"
+VERIFIED_DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
+
+# Pinned the same way as the Lite fingerprint below: computed once from the
+# split we first downloaded, then every later load must match it.
+VERIFIED_FINGERPRINT = "a69f166d719a9ab119adb807bbc273c0c63a3b4361c56eced7b59053365ea4d7"
 
 # sha256 over sorted "instance_id:base_commit" lines. Pins BOTH the task list
 # and the exact code states we are graded against — "300 tasks" alone is not a
@@ -73,10 +78,8 @@ class AgentView:
     problem_statement: str
 
 
-def load_lite(split: str = "test", check_fingerprint: bool = True) -> list[Instance]:
-    """Load SWE-bench_Lite and verify it is byte-for-byte the split we pinned."""
-    rows = load_dataset(DATASET_NAME, split=split)
-    instances = [
+def _to_instances(rows) -> list[Instance]:
+    return [
         Instance(
             instance_id=r["instance_id"],
             repo=r["repo"],
@@ -95,18 +98,37 @@ def load_lite(split: str = "test", check_fingerprint: bool = True) -> list[Insta
         )
         for r in rows
     ]
-    # Only the 300-task test split carries the pinned fingerprint; the 23-task
-    # dev split is scratch space and may be used freely.
+
+
+def _load_pinned(dataset_name: str, expected: str, split: str,
+                 check_fingerprint: bool) -> list[Instance]:
+    """Load a benchmark split and refuse to serve one that isn't the split we
+    pinned — an unpinned dataset makes every published number unverifiable."""
+    instances = _to_instances(load_dataset(dataset_name, split=split))
     if check_fingerprint and split == "test":
         actual = fingerprint(instances)
-        if actual != EXPECTED_FINGERPRINT:
+        if actual != expected:
             raise RuntimeError(
-                "SWE-bench_Lite test split does not match the pinned fingerprint.\n"
-                f"  expected {EXPECTED_FINGERPRINT}\n"
+                f"{dataset_name} test split does not match the pinned fingerprint.\n"
+                f"  expected {expected}\n"
                 f"  actual   {actual}\n"
                 "Numbers produced against this copy would not be comparable — refusing."
             )
     return instances
+
+
+def load_lite(split: str = "test", check_fingerprint: bool = True) -> list[Instance]:
+    """Load SWE-bench_Lite and verify it is byte-for-byte the split we pinned.
+    (Only the 300-task test split carries the fingerprint; the 23-task dev
+    split is scratch space and may be used freely.)"""
+    return _load_pinned(DATASET_NAME, EXPECTED_FINGERPRINT, split, check_fingerprint)
+
+
+def load_verified(split: str = "test", check_fingerprint: bool = True) -> list[Instance]:
+    """SWE-bench_Verified: the human-filtered 500-instance benchmark the field
+    actually competes on in 2026. Same schema, same firewall, own fingerprint."""
+    return _load_pinned(VERIFIED_DATASET_NAME, VERIFIED_FINGERPRINT, split,
+                        check_fingerprint)
 
 
 def agent_view(inst: Instance) -> AgentView:

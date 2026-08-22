@@ -56,7 +56,8 @@ def prune_if_needed(threshold_gb: float) -> bool:
     return True
 
 
-def prepull(instance_ids: list[str], namespace: str = "swebench") -> tuple[int, int]:
+def prepull(instance_ids: list[str], namespace: str = "swebench",
+            instances=None) -> tuple[int, int]:
     """Pull each instance image explicitly as linux/amd64 before grading.
 
     THE fix for Apple Silicon. These images publish an amd64-only manifest, and
@@ -71,7 +72,7 @@ def prepull(instance_ids: list[str], namespace: str = "swebench") -> tuple[int, 
     from fixpoint.bench import get, load_lite
     from fixpoint.eval.images import image_key
 
-    insts = load_lite()
+    insts = instances if instances is not None else load_lite()
     ok = bad = 0
     for iid in instance_ids:
         img = image_key(get(insts, iid), namespace=namespace)

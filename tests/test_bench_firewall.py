@@ -65,3 +65,23 @@ def test_fingerprint_changes_with_commit():
 
 def test_fingerprint_changes_with_instance_set():
     assert fingerprint([make("x-1")]) != fingerprint([make("x-1"), make("y-2")])
+
+
+def test_pinned_loader_refuses_a_drifted_split(monkeypatch):
+    """Any dataset served through _load_pinned must match its fingerprint —
+    an unpinned copy makes every published number unverifiable."""
+    import pytest
+
+    import fixpoint.bench.loader as loader
+
+    fake_rows = [{
+        "instance_id": "r__r-1", "repo": "r/r", "base_commit": "a" * 40,
+        "environment_setup_commit": "b" * 40, "version": "1.0",
+        "problem_statement": "x", "hints_text": "", "created_at": "",
+        "patch": "p", "test_patch": "t", "FAIL_TO_PASS": "[]", "PASS_TO_PASS": "[]",
+    }]
+    monkeypatch.setattr(loader, "load_dataset", lambda *a, **kw: fake_rows)
+    with pytest.raises(RuntimeError, match="pinned fingerprint"):
+        loader._load_pinned("fake/DS", "0" * 64, "test", True)
+    # and serves it fine when the caller opts out (dev-split semantics)
+    assert loader._load_pinned("fake/DS", "0" * 64, "test", False)[0].instance_id == "r__r-1"
