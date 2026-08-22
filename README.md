@@ -42,11 +42,10 @@ open-weight model endpoints (NVIDIA NIM), from-scratch retrieval to final PR.
 |:---|:---|:---|
 | **47% resolved** — CI [38%, 57%] | SWE-bench Lite, n=100 stratified subset | **$0.00** |
 | **32.7% resolved** — CI [28%, 38%] | SWE-bench Lite, all 300 instances | **$0.00** |
-| 36% resolved *(paid frontier reference)* | SWE-bench Lite, n=25 subset — Claude Sonnet 5 | $7.21 |
 
-Both free rows run Nemotron-3-Ultra via NVIDIA NIM. The free model **beats the
-paid frontier reference** on this scaffold — and 47% sits in the range of the
-best open-weight entry on the official Lite leaderboard.
+Both rows run Nemotron-3-Ultra via NVIDIA NIM's free tier — **47% sits in the
+range of the best open-weight entry on the official Lite leaderboard, at zero
+inference cost.**
 
 The number wasn't found, it was *built*: 37% → 44% → 47% on identical
 instances, one measured change at a time, including two published negative

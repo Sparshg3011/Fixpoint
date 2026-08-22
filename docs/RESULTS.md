@@ -14,7 +14,6 @@ full record.
 | Replan loop (keep-latest, superseded) | Nemotron-3-Ultra | Lite n=100 stratified | 41% — CI [32%, 51%] | $0.00 |
 | Single-shot pipeline (v1) | Nemotron-3-Ultra | Lite n=100 stratified | 37% — CI [28%, 47%] | $0.00 |
 | Single-shot pipeline (v1) | GLM-5.2 † | full Lite-300 | 23.0% — CI [19%, 28%] | $0.00 |
-| Single-shot (paid reference) | Claude Sonnet 5 | Lite n=25 subset | 36% — CI [20%, 55%] | $7.21 |
 
 † Retired by NVIDIA (end-of-life 2026-08-21) — the run remains archived and
 reproducible against the pinned dataset fingerprint.
