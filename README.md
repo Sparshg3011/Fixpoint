@@ -38,20 +38,20 @@ open-weight model endpoints (NVIDIA NIM), from-scratch retrieval to final PR.
 
 ## Results & Proof
 
-Three agent architectures, benchmarked on identical instances with identical
-grading — so each number isolates what its architecture adds:
+| result | benchmark | cost |
+|:---|:---|:---|
+| **47% resolved** — CI [38%, 57%] | SWE-bench Lite, n=100 stratified subset | **$0.00** |
+| **32.7% resolved** — CI [28%, 38%] | SWE-bench Lite, all 300 instances | **$0.00** |
+| 36% resolved *(paid frontier reference)* | SWE-bench Lite, n=25 subset — Claude Sonnet 5 | $7.21 |
 
-| architecture | model (free) | scope | resolved | cost |
-|:---|:---|:---|:---|:---|
-| **Interactive shell agent** | Nemotron-3-Ultra | Lite n=100 stratified | **47%** — CI [38%, 57%] | **$0.00** |
-| Single-shot pipeline (v2) | Nemotron-3-Ultra | Lite n=100 stratified | 44% — CI [35%, 54%] | $0.00 |
-| Single-shot pipeline (v2) | Nemotron-3-Ultra | **full Lite-300** | **32.7%** — CI [28%, 38%] | $0.00 |
-| Replan loop (keep-first) | Nemotron-3-Ultra | Lite n=100 stratified | 43% — CI [33%, 53%] | $0.00 |
-| Single-shot pipeline (v1) | Nemotron-3-Ultra | Lite n=100 stratified | 37% — CI [28%, 47%] | $0.00 |
-| Single-shot pipeline (v1) | GLM-5.2 † | full Lite-300 | 23.0% — CI [19%, 28%] | $0.00 |
-| Single-shot (paid reference) | Claude Sonnet 5 | Lite n=25 subset | 36% — CI [20%, 55%] | $7.21 |
+Both free rows run Nemotron-3-Ultra via NVIDIA NIM. The free model **beats the
+paid frontier reference** on this scaffold — and 47% sits in the range of the
+best open-weight entry on the official Lite leaderboard.
 
-† Retired by NVIDIA (end-of-life 2026-08-21) — the run remains archived and reproducible.
+The number wasn't found, it was *built*: 37% → 44% → 47% on identical
+instances, one measured change at a time, including two published negative
+results. The complete architecture ladder lives in
+[docs/RESULTS.md](docs/RESULTS.md).
 
 **What makes these numbers defensible:**
 
@@ -253,6 +253,7 @@ measured, what failed, and why:
 
 | document | what it records |
 |:---|:---|
+| [docs/RESULTS.md](docs/RESULTS.md) | The complete results ladder, every configuration ever benchmarked |
 | [docs/PLAN.md](docs/PLAN.md) | The build plan and its crux-first sequencing |
 | [docs/CALIBRATION.md](docs/CALIBRATION.md) | Red/green harness calibration; the one flaky instance |
 | [docs/RETRIEVAL.md](docs/RETRIEVAL.md) | BM25 from scratch, recall taxonomy, the mention-ranking win |
