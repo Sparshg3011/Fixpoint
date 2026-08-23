@@ -40,12 +40,15 @@ open-weight model endpoints (NVIDIA NIM), from-scratch retrieval to final PR.
 
 | result | benchmark | cost |
 |:---|:---|:---|
+| **64% resolved** — CI [50%, 76%] | **SWE-bench Verified**, n=50 stratified subset | **$0.00** |
 | **47% resolved** — CI [38%, 57%] | SWE-bench Lite, n=100 stratified subset | **$0.00** |
-| **32.7% resolved** — CI [28%, 38%] | SWE-bench Lite, all 300 instances | **$0.00** |
+| 32.7% resolved — CI [28%, 38%] | SWE-bench Lite, all 300 instances | $0.00 |
 
-Both rows run Nemotron-3-Ultra via NVIDIA NIM's free tier — **47% sits in the
-range of the best open-weight entry on the official Lite leaderboard, at zero
-inference cost.**
+All rows run Nemotron-3-Ultra via NVIDIA NIM's free tier. On the official
+leaderboard's standardized bash-only setting, paid frontier entries in the
+same band cost $140–375 per run — **64% at zero inference cost sits at parity
+with paid Claude 4 Sonnet and GPT-5-class entries there** (subset caveat
+noted honestly: n=50 versus the board's full 500).
 
 The number wasn't found, it was *built*: 37% → 44% → 47% on identical
 instances, one measured change at a time, including two published negative

@@ -32,5 +32,8 @@ until the traced keep-first fix closed the gap ([docs/REPLAN.md](REPLAN.md)).
 Negative results are part of the record, not an embarrassment
 ([docs/SHELL.md](SHELL.md)).
 
-A **SWE-bench Verified** campaign is in progress; its row lands here and in
-the README when the official harness finishes grading it.
+## SWE-bench Verified
+
+| architecture | model (free) | scope | resolved | cost |
+|:---|:---|:---|:---|:---|
+| **Interactive shell agent** | Nemotron-3-Ultra | Verified n=50 stratified | **64%** — CI [50%, 76%] | **$0.00** |

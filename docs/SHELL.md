@@ -52,3 +52,23 @@ deaths are never recorded as rows at all — a campaign that hits a quota wall
 now pauses itself rather than logging failures that say nothing about the
 instances. The recovery run regenerated exactly those 29 and the score moved
 35 -> 47 without touching the agent.
+
+## SWE-bench Verified, n=50 (nemotron-ultra, 2026-08-23)
+
+The same agent, pointed at the benchmark the live 2026 leaderboard uses
+(human-filtered, pinned fingerprint `a69f166d…`):
+
+| metric | value |
+|---|---|
+| RESOLVED | **32/50 = 64.0%** (CI [50%, 76%]) |
+| applied | 43/50 (86%) |
+| empty | 6 |
+| graded patches that resolved | 73% |
+
+Same engine and scaffold as the Lite-100 campaign (47%) — the 17-point gap
+between the two runs is the benchmarks, not the agent: Verified filtered out
+Lite's broken and underspecified instances. On the official standardized
+bash-only board this band is where paid Claude 4 Sonnet (64.9%, $0.37/inst)
+and GPT-5-medium (65.0%, $0.28/inst) sit. Subset caveat: n=50 stratified
+versus the board's full 500; the CI is wide and stated everywhere the number
+appears.
