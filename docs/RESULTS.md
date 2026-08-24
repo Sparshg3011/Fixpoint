@@ -37,3 +37,13 @@ Negative results are part of the record, not an embarrassment
 | architecture | model (free) | scope | resolved | cost |
 |:---|:---|:---|:---|:---|
 | **Interactive shell agent** | Nemotron-3-Ultra | Verified n=50 stratified | **64%** — CI [50%, 76%] | **$0.00** |
+
+## Engine comparison (identical scaffold, identical Lite n=25 instances)
+
+| model (free) | resolved | applied | notes |
+|:---|:---|:---|:---|
+| **MiniMax M3** | **17/25 = 68%** | 22/25 | 77% of graded patches resolved |
+| Nemotron-3-Ultra | 11/25 = 44% | 18/25 | the scaffold-era baseline |
+
+The 24-point gap is pure engine — same shell agent, same sealed containers,
+same grading. A Verified n=50 campaign with M3 is in flight.
