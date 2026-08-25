@@ -47,3 +47,5 @@ Negative results are part of the record, not an embarrassment
 
 The 24-point gap is pure engine — same shell agent, same sealed containers,
 same grading. A Verified n=50 campaign with M3 is in flight.
+
+| Kimi K3 | 10/25 = 40% | 12 gradable | 10 of 12 graded resolved (83%) — best per-completion quality, worst quota weather; throughput made it unviable as the campaign engine |
