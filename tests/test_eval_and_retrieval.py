@@ -141,3 +141,19 @@ def test_cost_math_matches_the_price_table():
 
 def test_cost_of_unknown_model_is_zero_not_a_crash():
     assert _cost("some-future-model", 1000, 1000) == 0.0
+
+
+def test_corpus_extensions_cover_non_python_repos(tmp_path):
+    """A github.io-style repo (zero .py files) must still yield a corpus for
+    the product flow — corpus_files=0 turned a real user run into two blind
+    model calls. The benchmark default stays .py-only."""
+    from fixpoint.retrieval.corpus import CODE_EXTENSIONS, load_corpus
+
+    (tmp_path / "index.html").write_text("<h1>hi</h1>")
+    (tmp_path / "style.css").write_text("h1 { color: red; }")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "junk.js").write_text("vendored")
+
+    assert load_corpus(tmp_path) == []  # benchmark default: .py only
+    docs = load_corpus(tmp_path, extensions=CODE_EXTENSIONS)
+    assert {d.path for d in docs} == {"index.html", "style.css"}  # vendored dir skipped

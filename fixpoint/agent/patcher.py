@@ -80,7 +80,15 @@ def _stable_prompt(problem_statement: str, files: dict[str, str]) -> str:
     parts = [f"# GitHub issue\n\n{problem_statement.strip()}\n", "# Candidate files\n"]
     for path, content in files.items():
         # Fence each file with its path so the model can address edits by path.
-        parts.append(f"\n## {path}\n```python\n{content}\n```\n")
+        # The fence language follows the file: labeling an HTML file as python
+        # (the old hardcoded value) misleads the model on non-Python repos.
+        # .py files keep the exact bytes the benchmark prompts always had.
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+        lang = {"py": "python", "js": "javascript", "mjs": "javascript",
+                "ts": "typescript", "tsx": "typescript", "jsx": "javascript",
+                "rb": "ruby", "rs": "rust", "kt": "kotlin",
+                "yml": "yaml", "md": "markdown", "htm": "html"}.get(ext, ext)
+        parts.append(f"\n## {path}\n```{lang}\n{content}\n```\n")
     return "\n".join(parts)
 
 

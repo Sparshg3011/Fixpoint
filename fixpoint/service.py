@@ -33,6 +33,7 @@ from fixpoint.agent.secrets import load_env
 from fixpoint.diary import RUNS_DIR, Diary
 from fixpoint.eval.singleshot import git_apply_check
 from fixpoint.retrieval import load_corpus, tree_at
+from fixpoint.retrieval.corpus import CODE_EXTENSIONS
 from fixpoint.retrieval.guided import resolve_requested_paths
 from fixpoint.retrieval.rank import ranked_files
 
@@ -86,9 +87,17 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
 
     d.record("sandbox", "started", repo=repo, commit=commit[:12])
     tree = tree_at(repo, commit)
-    docs = load_corpus(tree)
+    # Arbitrary repos aren't Python projects — index every common source type.
+    # (The benchmark path keeps its .py-only corpus; see corpus.py.)
+    docs = load_corpus(tree, extensions=CODE_EXTENSIONS)
     by_path = {x.path: x.text for x in docs}
     d.record("sandbox", "succeeded", corpus_files=len(docs))
+    if not docs:
+        # A model given zero files can only fail confusingly. Fail clearly.
+        d.record("loop", "failed", green=False,
+                 error="no supported source files found in this repository")
+        return {"diff": "", "applied": False, "files": [], "commit": commit,
+                "error": "no supported source files found in this repository"}
 
     d.record("retrieval", "started", query_chars=len(issue_text))
     ranked = ranked_files(docs, issue_text, k=k)

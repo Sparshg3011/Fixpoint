@@ -30,11 +30,33 @@ def is_test_path(rel_path: str) -> bool:
     return name.startswith("test_") or name.endswith("_test.py")
 
 
-def load_corpus(tree: Path, include_tests: bool = False, max_bytes: int = 300_000) -> list[Document]:
-    """All candidate .py files under tree, sorted by path for determinism."""
+# What the product flow indexes for arbitrary repos. The benchmark keeps its
+# .py-only default — the twelve Lite repos are Python and the published
+# numbers were measured against that corpus definition — but a user's repo can
+# be a static site, a Go service, anything. Text-ish source only; binaries and
+# lockfiles stay out.
+CODE_EXTENSIONS = (
+    ".py", ".js", ".mjs", ".ts", ".jsx", ".tsx", ".vue", ".svelte",
+    ".html", ".htm", ".css", ".scss", ".less",
+    ".md", ".rst", ".txt", ".json", ".yml", ".yaml", ".toml", ".ini", ".xml",
+    ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".php",
+    ".c", ".cc", ".cpp", ".h", ".hpp", ".sh",
+)
+
+
+def load_corpus(tree: Path, include_tests: bool = False, max_bytes: int = 300_000,
+                extensions: tuple[str, ...] = (".py",)) -> list[Document]:
+    """All candidate files under tree with a matching suffix, sorted by path
+    for determinism. Defaults to .py only — the benchmark corpus definition —
+    with node_modules/.git-style vendored dirs always excluded."""
+    skip_dirs = {".git", "node_modules", "vendor", "dist", "build", ".venv", "__pycache__"}
     docs: list[Document] = []
-    for p in sorted(tree.rglob("*.py")):
+    for p in sorted(tree.rglob("*")):
+        if not p.is_file() or p.suffix.lower() not in extensions:
+            continue
         rel = p.relative_to(tree).as_posix()
+        if any(seg in skip_dirs for seg in rel.split("/")):
+            continue
         if not include_tests and is_test_path(rel):
             continue
         if p.stat().st_size > max_bytes:
