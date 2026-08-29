@@ -8,7 +8,7 @@
 [![Docker](https://img.shields.io/badge/Docker-sandboxed-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![pytest](https://img.shields.io/badge/tests-138_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](#results--proof)
-[![SWE-bench](https://img.shields.io/badge/SWE--bench_Lite-47%25_at_$0-3FB950?style=for-the-badge)](#results--proof)
+[![SWE-bench](https://img.shields.io/badge/SWE--bench_Verified-64%25_at_$0-3FB950?style=for-the-badge)](#results--proof)
 [![CI](https://img.shields.io/github/actions/workflow/status/Sparshg3011/Fixpoint/ci.yml?style=for-the-badge&label=CI)](https://github.com/Sparshg3011/Fixpoint/actions)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -29,10 +29,28 @@ files, runs the project's own tests, and submits when its fix verifies.
 [SWE-bench](https://www.swebench.com) harness** on real GitHub issues from twelve
 Python projects (Django, sympy, scikit-learn, matplotlib, …). The agent never sees
 the reference solutions or the graded tests — that firewall is enforced in code and
-audited in CI, not promised in prose.
+checked in CI.
 
 **Total inference cost of every result: $0.00.** The entire stack runs on free
 open-weight model endpoints (NVIDIA NIM), from-scratch retrieval to final PR.
+
+---
+
+## Screenshots
+
+The scoreboard — every row discovered from artifacts on disk, nothing hardcoded:
+
+![Benchmark results](docs/screenshots/results.png)
+
+A recorded run, replayed through the same renderer that shows live runs — agent
+rail, event feed, the patch, and the sandbox output as the reproducer goes green:
+
+![Run replay](docs/screenshots/replay.png)
+
+The product flow: point it at any public repo and issue, watch it work, open a
+PR on your fork:
+
+![New fix](docs/screenshots/newfix.png)
 
 ---
 
@@ -50,10 +68,9 @@ same band cost $140–375 per run — **64% at zero inference cost sits at parit
 with paid Claude 4 Sonnet and GPT-5-class entries there** (subset caveat
 noted honestly: n=50 versus the board's full 500).
 
-The number wasn't found, it was *built*: 37% → 44% → 47% on identical
-instances, one measured change at a time, including two published negative
-results. The complete architecture ladder lives in
-[docs/RESULTS.md](docs/RESULTS.md).
+The score went 37% → 44% → 47% on the same instances, one change at a time.
+The full history of every configuration ever benchmarked, including the two
+changes that made things worse, is in [docs/RESULTS.md](docs/RESULTS.md).
 
 **What makes these numbers defensible:**
 
@@ -69,18 +86,13 @@ results. The complete architecture ladder lives in
   out of agent code.
 - **Lower-bound counting** — instances that could not be graded count as
   unresolved, never dropped.
-- **Negative results are published** — two scaffold changes measured as harmful
-  were traced, reverted, and journaled ([docs/SHELL.md](docs/SHELL.md),
-  [docs/REPLAN.md](docs/REPLAN.md)). The 66% applied→resolved conversion of the
-  shell agent — against 40% for single-shot — is the measured value of letting the
-  agent test its own fixes.
+- **Failures stay in the record** — two changes that made results worse were
+  traced, reverted, and written up ([docs/SHELL.md](docs/SHELL.md),
+  [docs/REPLAN.md](docs/REPLAN.md)). And the shell agent's 66% applied-to-resolved
+  conversion (vs 40% for single-shot) is what testing your own fixes buys.
 
-A **SWE-bench Verified** campaign (the live 2026 leaderboard's benchmark) is in
-progress on the same stack.
 
-**These are real captured runs, not mock-ups.**
-
-The n=100 shell campaign's closing summary, exactly as the runner printed it:
+Some captured output, straight from the runs:
 
 ```text
 $ python scripts/run_shell_bench.py --n 100 --model nvidia/nemotron-3-ultra-550b-a55b
@@ -185,7 +197,7 @@ sanitizer), and a **replan loop** that iterates against a self-written reproduce
    failure); two malformed replies end the run.
 3. **The patch is `git diff`.** No edit format, no patch synthesis, no way to
    write a malformed diff. Binary junk is excluded by construction.
-4. **Grading is somebody else's code.** The unmodified harness applies the patch
+4. **Grading is the official harness, unmodified.** It applies the patch
    and runs the instance's hidden test sets. RESOLVED means every failing test
    now passes and nothing regressed.
 5. **Campaigns survive everything.** Rows checkpoint as they finish; images are
@@ -228,7 +240,7 @@ python scripts/grade_chunked.py --predictions data/shell/<model>/predictions.jso
 
 ## Honest Scope
 
-Claims are only as good as their caveats, so these are load-bearing:
+Caveats worth knowing before quoting any of the numbers:
 
 - **Sampling.** Temperature is not pinned; every number is one draw. Subset
   results carry Wilson 95% CIs; run-to-run variance has not yet been measured
@@ -250,8 +262,7 @@ Claims are only as good as their caveats, so these are load-bearing:
 
 ## Design Notes
 
-The project keeps lab journals rather than changelogs — each records what was
-measured, what failed, and why:
+Each doc records what was measured, what broke, and why:
 
 | document | what it records |
 |:---|:---|

@@ -184,7 +184,10 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 .dot-live { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
 
 /* ---------- run view ---------- */
-.runview { display: grid; grid-template-columns: 210px 1fr 1.1fr; gap: 16px; align-items: start; }
+/* minmax(0,…) lets grid children shrink without collapsing their text into
+   one-character-per-line wrapping; the feed keeps a readable floor instead. */
+.runview { display: grid; grid-template-columns: 210px minmax(280px, 1fr) minmax(0, 1.1fr);
+           gap: 16px; align-items: start; }
 @media (max-width: 1080px) { .runview { grid-template-columns: 1fr; } .rail { flex-direction: row !important; } }
 
 .rail { display: flex; flex-direction: column; gap: 0; padding: 18px 14px; position: sticky; top: 76px; }
@@ -214,7 +217,7 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 .evt .t { font: 11px var(--mono); color: var(--dim); flex: none; width: 52px; }
 .evt .badge { flex: none; width: 88px; font: 600 11px/1 var(--mono); letter-spacing: .04em; }
 .evt .msg { color: var(--muted); font-family: var(--mono); font-size: 12.5px;
-            overflow-wrap: anywhere; }
+            overflow-wrap: anywhere; flex: 1; min-width: 0; }
 .evt.ok .badge { color: var(--green); } .evt.bad .badge { color: var(--red); }
 .evt.go .badge { color: var(--blue); }
 

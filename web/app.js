@@ -66,7 +66,15 @@ async function showResults() {
       <p class="mono">python scripts/run_singleshot.py --n 25</p></div>`;
     return;
   }
-  const head = models.find((m) => m.resolve_rate != null) || models[0];
+  // Headline = the best resolve rate among COMPLETE, substantially-graded
+  // campaigns. Sorting by n alone once put a 32.7% row above a 64% one, and a
+  // suspended partial must never headline on its misleading interim rate.
+  // n >= 50: a 25-instance audition can swing ten points on luck alone — the
+  // headline needs scale as well as completion.
+  const complete = models.filter((m) =>
+    m.resolve_rate != null && m.graded >= 20 && m.generated >= m.n && m.n >= 50);
+  const head = complete.sort((a, b) => b.resolve_rate - a.resolve_rate)[0] ||
+    models.find((m) => m.resolve_rate != null) || models[0];
   const chip = $("#headline-chip");
   chip.hidden = false;
   chip.textContent = `${pct(head.resolve_rate)} of ${head.n} · ${usd(head.cost_usd)}`;
@@ -128,7 +136,8 @@ async function showResults() {
                 ? ' <span class="chip chip-amber" title="SWE-bench Verified (500, human-filtered) — the live 2026 board">verified</span>' : ""}</td>
               <td>${funnel(m)}</td>
               <td class="num">${pct(m.apply_rate)}</td>
-              <td class="num"><span class="chip ${m.resolve_rate ? "chip-green" : "chip-dim"}">${pct(m.resolve_rate)}</span></td>
+              <td class="num"><span class="chip ${m.resolve_rate ? "chip-green" : "chip-dim"}">${pct(m.resolve_rate)}</span>${m.generated < m.n
+                ? ' <span class="chip chip-amber" title="campaign incomplete — this rate is an interim floor">partial</span>' : ""}</td>
               <td class="num">${usd(m.cost_usd)}</td>
               <td class="num">${secs(m.wall_s)}</td>
             </tr>`).join("")}

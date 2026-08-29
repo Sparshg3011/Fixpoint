@@ -24,12 +24,12 @@ BACKEND = os.environ.get("FIXPOINT_BACKEND", "openai")
 #   Ollama      http://localhost:11434/v1             (local, free)
 BASE_URL = os.environ.get("FIXPOINT_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
-# Default model, free via NVIDIA NIM. GLM-5.2 held this slot on measured
-# evidence until NIM retired it (410 Gone, EOL 2026-08-21) — free-tier models
-# are mortal, which is why every run records its exact model id. Kimi K3
-# succeeds it: its predecessor K2.5 out-scores the GLM family on the current
-# SWE-bench Verified board. Override with FIXPOINT_MODEL.
-DEFAULT_MODEL = os.environ.get("FIXPOINT_MODEL", "moonshotai/kimi-k3")
+# Default model, free via NVIDIA NIM. Nemotron-3-Ultra holds this slot as the
+# most quota-reliable of the engines we benchmarked (it carried the published
+# Verified 64%); free-tier models come and go — GLM-5.2 hit end-of-life
+# mid-project — which is why every run records its exact model id.
+# Override with FIXPOINT_MODEL.
+DEFAULT_MODEL = os.environ.get("FIXPOINT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 
 # USD per 1M tokens (input, output). Used only to attach a dollar figure to each
 # call — the harness bills nothing. Unknown models price at 0.0, which is the
