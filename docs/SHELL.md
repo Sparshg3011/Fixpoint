@@ -72,3 +72,13 @@ bash-only board this band is where paid Claude 4 Sonnet (64.9%, $0.37/inst)
 and GPT-5-medium (65.0%, $0.28/inst) sit. Subset caveat: n=50 stratified
 versus the board's full 500; the CI is wide and stated everywhere the number
 appears.
+
+## MiniMax M3 on Verified: suspended at n=28 by provider throttling (2026-08-29)
+
+The M3 engine (68% on the Lite audition, 24 points above Nemotron on identical
+instances) ran 28 of 50 Verified instances before NVIDIA's free tier froze its
+lane for four consecutive days. Partial tally at suspension: **18 resolved of
+26 graded (69% of graded)** — consistent with, and NOT claimed as exceeding,
+the published Nemotron 64%. A partial subset is not a result; the campaign
+checkpoint is preserved and resumes with one command if the lane reopens.
+Published claims remain exactly what completed: Nemotron's full n=50 at 64%.
