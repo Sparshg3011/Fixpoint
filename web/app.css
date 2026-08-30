@@ -24,7 +24,9 @@
 }
 
 * { box-sizing: border-box; }
-html { color-scheme: light; }
+/* `only light` opts out of Chromium's forced/auto dark mode — embedded
+   browsers that sync to a dark host app would otherwise invert the design. */
+html { color-scheme: only light; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 15px/1.6 var(--sans);
