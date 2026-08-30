@@ -66,6 +66,14 @@ async function showResults() {
       <p class="mono">python scripts/run_singleshot.py --n 25</p></div>`;
     return;
   }
+  // Shell rows lead the table (the current architecture), baselines follow —
+  // sorted within each group by scope. The baselines stay on the board on
+  // purpose: 32.7% -> 47% on identical instances is the proof the shell
+  // agent earned its number.
+  const modeRank = { shell: 0, loop: 1, "single-shot": 2 };
+  models.sort((a, b) => (modeRank[a.mode] ?? 3) - (modeRank[b.mode] ?? 3)
+    || (b.resolve_rate ?? -1) - (a.resolve_rate ?? -1) || (b.n ?? 0) - (a.n ?? 0));
+
   // Headline = the best resolve rate among COMPLETE, substantially-graded
   // campaigns. Sorting by n alone once put a 32.7% row above a 64% one, and a
   // suspended partial must never headline on its misleading interim rate.
@@ -125,7 +133,7 @@ async function showResults() {
           <th class="num">apply</th><th class="num">resolved</th><th class="num">cost</th><th class="num">gen time</th></tr></thead>
         <tbody id="model-rows">
           ${models.map((m) => `
-            <tr data-dir="${esc(m.dir)}">
+            <tr data-dir="${esc(m.dir)}" class="${m.mode === "shell" ? "" : "row-baseline"}">
               <td class="mono">${esc(shortModel(m.model))}
                 ${m.mode === "shell"
                   ? '<span class="chip chip-green" title="interactive bash agent: explores, edits, and tests inside the container">shell</span>'

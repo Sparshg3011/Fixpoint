@@ -260,3 +260,4 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+\n/* Earlier-architecture rows: present but visually subordinate to shell rows. */\n.row-baseline td { opacity: .68; }\n.row-baseline:hover td, .row-baseline.selected td { opacity: 1; }\n
