@@ -273,7 +273,7 @@ async function showRuns() {
         <span class="dot ${r.live ? "dot-live" : r.green ? "dot-green" : "dot-red"}"></span>
         <span class="mono">${esc(r.instance_id)}</span>
         ${r.live ? '<span class="chip chip-accent">LIVE</span>'
-                 : `<span class="chip ${r.green ? "chip-green" : "chip-red"}">${r.green ? "loop green" : "loop red"}</span>`}
+                 : `<span class="chip ${r.green ? "chip-green" : "chip-red"}">${r.green ? "success" : "failed"}</span>`}
         <span class="meta"><span>${r.events} events</span><span>${secs(r.duration_s)}</span>
           <span>${new Date(r.started * 1000).toLocaleString()}</span></span>
       </div>`).join("")}</div>`;
