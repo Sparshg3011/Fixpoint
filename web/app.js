@@ -152,9 +152,9 @@ async function showResults() {
         </tbody>
       </table></div>
       <div class="legend">
-        <span><i style="background:rgba(88,166,255,.4)"></i>gold file retrieved</span>
-        <span><i style="background:rgba(210,153,34,.55)"></i>patch applied</span>
-        <span><i style="background:var(--green)"></i>resolved</span>
+        <span><i style="background:rgba(9,105,218,.35)"></i>gold file retrieved</span>
+        <span><i style="background:rgba(154,103,0,.45)"></i>patch applied</span>
+        <span><i style="background:var(--green-bar)"></i>resolved</span>
       </div>
     </div>
     <div class="section" id="instances-section" hidden>
