@@ -96,7 +96,7 @@ async function showResults() {
 
   view.innerHTML = `
     <h1>Benchmark results</h1>
-    <p class="muted" style="margin:0 0 22px">Resolve rates on SWE-bench-Lite,
+    <p class="muted" style="margin:0 0 22px">Resolve rates on SWE-bench,
       graded by the unmodified official Docker harness. <b>1-shot</b> rows are one
       attempt with no execution feedback; <b>loop</b> rows replan against the agent's
       own reproducer; <b>shell</b> rows are the interactive bash agent working
