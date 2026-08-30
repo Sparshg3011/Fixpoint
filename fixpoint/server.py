@@ -292,6 +292,17 @@ async def fix_pr(run_id: str, body: dict) -> dict:
             "dry_run": res.dry_run}
 
 
+@app.middleware("http")
+async def _no_stale_ui(request, call_next):
+    """Static responses revalidate on every load. Without this, a browser that
+    has ever seen the UI keeps its cached app.css/app.js indefinitely and
+    silently shows an old design — the ETag makes revalidation a cheap 304."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Frontend last, so /api/* wins routing. html=True serves index.html at /.
 if WEB.exists():
     app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
