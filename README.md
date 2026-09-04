@@ -207,7 +207,9 @@ sanitizer), and a **replan loop** that iterates against a self-written reproduce
 
 The same machinery powers the product flow: paste any public repo + issue into
 the web UI, watch the agent work live (every run streams its event diary), and
-open the resulting PR on your own fork — never upstream.
+open the resulting PR on your own fork — never upstream. Deployed instances
+publish as a GitHub App (`fixpoint[bot]`) instead of anyone's personal login —
+setup in [docs/GITHUB_APP.md](docs/GITHUB_APP.md).
 
 ---
 

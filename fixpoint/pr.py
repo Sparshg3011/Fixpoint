@@ -12,6 +12,11 @@ maintainers with machine-generated code. So:
     with the patch applied, then open fix -> base. The diff shown is exactly the
     agent's patch, one commit, nothing else.
 
+Two identities can publish. With a GitHub App configured (github_app.py) the
+PR comes from `<slug>[bot]` and the safety rule becomes "the App is installed
+on the target" — an owner has to grant that deliberately. Otherwise the `gh`
+login publishes into its own fork. Dry runs take no outward action in either.
+
 Nothing here calls a model — it consumes patches already produced and graded.
 """
 
@@ -35,6 +40,7 @@ class PRResult:
     branch: str
     base_branch: str
     dry_run: bool
+    actor: str = ""  # who the PR is (or would be) authored as
 
 
 def _gh(*args: str, check: bool = True) -> str:
@@ -89,16 +95,31 @@ def assert_safe_target(target: str) -> None:
 def open_pr(*, upstream: str, base_commit: str, patch: str, instance_id: str,
             problem_statement: str = "", resolved: bool = False,
             dry_run: bool = True) -> PRResult:
-    """Push base + fix branches to your fork and open a PR between them.
+    """Push base + fix branches and open a PR between them.
 
     A dry run does everything locally — clone, branch, apply, diff — and takes
     no outward action at all: no fork is created, nothing is pushed, no PR is
     opened. That is what makes it safe to run freely.
     """
-    # Resolve the name in both modes so the safety check runs either way, but
-    # only CREATE the fork when we are really going to publish.
-    fork = ensure_fork(upstream) if not dry_run else fork_name(upstream)
-    assert_safe_target(fork)
+    from fixpoint import github_app  # lazy: only the PR flow pays for the import
+
+    app = github_app.client_if_configured()
+    if app is not None:
+        # App mode: publish into the repo itself, which the App must be
+        # installed on. Not installed == not permitted, same as not owned.
+        try:
+            app.assert_installed(upstream)
+        except github_app.AppNotInstalledError as e:
+            raise PRSafetyError(str(e)) from e
+        target, actor = upstream, app.bot_login()
+        author = app.commit_identity()
+    else:
+        # Personal mode: resolve the fork name in both modes so the safety
+        # check runs either way, but only CREATE the fork when publishing.
+        target = ensure_fork(upstream) if not dry_run else fork_name(upstream)
+        assert_safe_target(target)
+        actor = current_user()
+        author = ("fixpoint-agent", "fixpoint@localhost")
 
     short = base_commit[:8]
     base_branch = f"fixpoint/base-{instance_id}"
@@ -124,22 +145,31 @@ def open_pr(*, upstream: str, base_commit: str, patch: str, instance_id: str,
         else:
             raise RuntimeError(f"patch for {instance_id} did not apply to {short}")
 
-        _git("-c", "user.name=fixpoint-agent", "-c", "user.email=fixpoint@localhost",
+        _git("-c", f"user.name={author[0]}", "-c", f"user.email={author[1]}",
              "commit", "-aqm", f"fix: {instance_id}", cwd=work)
 
         if dry_run:
             stat = _git("diff", "--stat", base_branch, fix_branch, cwd=work)
-            return PRResult(url=f"(dry run) would open PR on {fork}\n{stat}",
-                            branch=fix_branch, base_branch=base_branch, dry_run=True)
+            return PRResult(url=f"(dry run) would open PR on {target} as {actor}\n{stat}",
+                            branch=fix_branch, base_branch=base_branch, dry_run=True,
+                            actor=actor)
 
-        remote = f"https://github.com/{fork}.git"
-        _git("push", "-q", "--force", remote, f"{base_branch}:{base_branch}", cwd=work)
-        _git("push", "-q", "--force", remote, f"{fix_branch}:{fix_branch}", cwd=work)
+        remote = f"https://github.com/{target}.git"
+        # App mode carries its token in an HTTP header (push_config), never in
+        # the remote URL — so no git error message or log can ever quote it.
+        auth = app.push_config() if app is not None else []
+        _git(*auth, "push", "-q", "--force", remote, f"{base_branch}:{base_branch}", cwd=work)
+        _git(*auth, "push", "-q", "--force", remote, f"{fix_branch}:{fix_branch}", cwd=work)
 
     body = _pr_body(instance_id, upstream, base_commit, problem_statement, resolved)
-    url = _gh("pr", "create", "--repo", fork, "--base", base_branch, "--head", fix_branch,
-              "--title", f"fix: {instance_id}", "--body", body)
-    return PRResult(url=url, branch=fix_branch, base_branch=base_branch, dry_run=False)
+    title = f"fix: {instance_id}"
+    if app is not None:
+        url = app.create_pr(target, base=base_branch, head=fix_branch, title=title, body=body)
+    else:
+        url = _gh("pr", "create", "--repo", target, "--base", base_branch, "--head", fix_branch,
+                  "--title", title, "--body", body)
+    return PRResult(url=url, branch=fix_branch, base_branch=base_branch, dry_run=False,
+                    actor=actor)
 
 
 def _pr_body(instance_id: str, upstream: str, base_commit: str,

@@ -25,6 +25,9 @@ dependencies = [
     # `python -m fixpoint.server`, not dev conveniences.
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    # GitHub App identity for the PR flow: RS256-signed app JWTs exchanged for
+    # short-lived installation tokens. [crypto] pulls in `cryptography`.
+    "PyJWT[crypto]>=2.8",
 ]
 
 [project.optional-dependencies]

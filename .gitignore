@@ -8,3 +8,6 @@ logs/
 .DS_Store
 .pytest_cache/
 runs/
+
+# GitHub App private keys — never in the repo
+*.pem

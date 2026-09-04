@@ -464,7 +464,12 @@ async function mountPRPanel(runId) {
       ? "" : `${data.url}\nbranches: ${data.branch} -> ${data.base_branch}`;
     if (execute) $("#pr-out").innerHTML =
       `PR opened: <a href="${esc(data.url)}" target="_blank" rel="noopener">${esc(data.url)}</a>`;
-    else $("#pr-go").hidden = false;
+    else {
+      // The button names the identity that will publish: your account in
+      // personal mode, the App's bot login when one is configured.
+      if (data.actor) $("#pr-go").textContent = `Create PR as ${data.actor}`;
+      $("#pr-go").hidden = false;
+    }
   };
   $("#pr-dry").onclick = () => call(false);
   $("#pr-go").onclick = () => call(true);

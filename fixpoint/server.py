@@ -289,7 +289,7 @@ async def fix_pr(run_id: str, body: dict) -> dict:
     except Exception as e:
         raise HTTPException(500, str(e)) from e
     return {"url": res.url, "branch": res.branch, "base_branch": res.base_branch,
-            "dry_run": res.dry_run}
+            "dry_run": res.dry_run, "actor": res.actor}
 
 
 @app.middleware("http")
