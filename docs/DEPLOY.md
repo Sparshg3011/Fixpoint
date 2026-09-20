@@ -60,6 +60,10 @@ CPU, the worst case a free instance can be given:
 Benchmark campaigns keep the full mirror — they revisit dozens of commits per
 repository and would pay the fetch over and over.
 
+End to end on that same tenth of a CPU, django takes about twelve minutes and
+peaks at 89 MiB; a small repository like `pallets/click` answers in under
+three. Most of that is the model thinking, not the host.
+
 Only **public** repositories can be fixed from a host (there is no keychain
 there). PRs from a host are opened by the GitHub App — see
 [GITHUB_APP.md](GITHUB_APP.md); without it the PR button explains what is missing.
