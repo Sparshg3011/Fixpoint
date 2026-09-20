@@ -7,12 +7,18 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-sandboxed-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![pytest](https://img.shields.io/badge/tests-176_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](#results--proof)
+[![pytest](https://img.shields.io/badge/tests-180_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](#results--proof)
 [![SWE-bench](https://img.shields.io/badge/SWE--bench_Verified-64%25_at_$0-3FB950?style=for-the-badge)](#results--proof)
 [![CI](https://img.shields.io/github/actions/workflow/status/Sparshg3011/Fixpoint/ci.yml?style=for-the-badge&label=CI)](https://github.com/Sparshg3011/Fixpoint/actions)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-[Results](#results--proof) · [Architecture](#architecture) · [How it works](#how-it-works) · [Quick Start](#quick-start) · [Honest Scope](#honest-scope) · [Design Notes](#design-notes)
+### [→ Try it live](https://fixpoint-6bry.onrender.com)
+
+The scoreboard and every recorded run are public; starting a new fix needs the
+operator's token. Free hosting sleeps after 15 idle minutes — the first visit
+takes a moment to wake.
+
+[Live demo](https://fixpoint-6bry.onrender.com) · [Results](#results--proof) · [Architecture](#architecture) · [How it works](#how-it-works) · [Quick Start](#quick-start) · [Honest Scope](#honest-scope) · [Design Notes](#design-notes)
 
 </div>
 
