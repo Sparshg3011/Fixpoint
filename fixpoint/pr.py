@@ -44,7 +44,14 @@ class PRResult:
 
 
 def _gh(*args: str, check: bool = True) -> str:
-    proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    try:
+        proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    except FileNotFoundError:
+        # Personal mode rides on the gh CLI's login. A host has neither — there
+        # the GitHub App is the only identity that makes sense.
+        raise RuntimeError("opening PRs here needs the GitHub App to be configured "
+                           "(docs/GITHUB_APP.md) — the gh CLI is not available on this host"
+                           ) from None
     if check and proc.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args)} failed:\n{proc.stderr.strip()}")
     return proc.stdout.strip()

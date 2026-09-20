@@ -16,9 +16,12 @@ INSTALLED on. That is the bot-world equivalent of "you own it" — an owner has
 to grant access deliberately — so PRs against arbitrary upstreams remain
 impossible by construction, exactly as in the personal-fork mode.
 
-Configuration (in .env, never in commands or logs):
+Configuration (in .env or host secrets, never in commands or logs):
   FIXPOINT_GH_APP_ID            numeric App ID
-  FIXPOINT_GH_APP_KEY           path to the downloaded private key (.pem)
+  FIXPOINT_GH_APP_KEY           the private key: a path to the .pem (laptops),
+                                or the PEM text itself (host secret stores)
+  FIXPOINT_GH_APP_KEY_B64       alternative: the .pem base64-encoded, for
+                                secret stores that mangle multi-line values
   FIXPOINT_GH_INSTALLATION_ID   optional; discovered when the App has exactly
                                 one installation
 """
@@ -40,7 +43,27 @@ class AppNotInstalledError(Exception):
 
 
 def configured() -> bool:
-    return bool(os.environ.get("FIXPOINT_GH_APP_ID") and os.environ.get("FIXPOINT_GH_APP_KEY"))
+    return bool(os.environ.get("FIXPOINT_GH_APP_ID") and (
+        os.environ.get("FIXPOINT_GH_APP_KEY") or os.environ.get("FIXPOINT_GH_APP_KEY_B64")))
+
+
+def private_key_from_env() -> str:
+    """The App's PEM, from whichever form the environment carries.
+
+    A laptop points at a file; a host has no files, only secrets — so the same
+    variable may hold the PEM text itself (literal "\\n" sequences are
+    un-escaped, since some dashboards flatten newlines), or a base64 variant
+    exists for stores that cannot hold multi-line values at all.
+    """
+    import base64
+
+    b64 = os.environ.get("FIXPOINT_GH_APP_KEY_B64")
+    if b64:
+        return base64.b64decode(b64).decode()
+    value = os.environ["FIXPOINT_GH_APP_KEY"]
+    if "-----BEGIN" in value:
+        return value.replace("\\n", "\n")
+    return Path(value).expanduser().read_text()
 
 
 def app_jwt(app_id: str, private_key_pem: str, now: float | None = None) -> str:
@@ -69,8 +92,7 @@ class AppClient:
 
     @classmethod
     def from_env(cls) -> AppClient:
-        return cls(os.environ["FIXPOINT_GH_APP_ID"],
-                  Path(os.environ["FIXPOINT_GH_APP_KEY"]).read_text(),
+        return cls(os.environ["FIXPOINT_GH_APP_ID"], private_key_from_env(),
                   os.environ.get("FIXPOINT_GH_INSTALLATION_ID") or None)
 
     # -- identity -----------------------------------------------------------

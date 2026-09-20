@@ -17,22 +17,25 @@ vanishes. The UI is a pure renderer of these endpoints.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
+import os
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from fixpoint.diary import EVENTS, STAGES, read
+from fixpoint.paths import RUNS_DIR
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SINGLESHOT = REPO_ROOT / "data" / "singleshot"
 LOOP = REPO_ROOT / "data" / "loop"
 SHELL = REPO_ROOT / "data" / "shell"
 CALIBRATION = REPO_ROOT / "data" / "calibration"
-RUNS = REPO_ROOT / "runs"
+RUNS = RUNS_DIR  # under FIXPOINT_STATE_DIR when a host mounts a volume
 WEB = REPO_ROOT / "web"
 
 app = FastAPI(title="fixpoint", docs_url=None, redoc_url=None)
@@ -73,10 +76,63 @@ def _resolve_dir(model_dir: str) -> Path | None:
     return d if d.is_dir() else None
 
 
+# ---------------------------------------------------------------------------
+# Who may START things. Reading is public; spending the owner's model quota and
+# cloning arbitrary repositories onto the host is not.
+# ---------------------------------------------------------------------------
+
+_PROXY_HEADERS = ("x-forwarded-for", "forwarded", "fly-client-ip", "x-real-ip")
+
+
+def _is_local(request: Request) -> bool:
+    """True only for a browser on the same machine talking to us directly.
+    Anything that arrived through a proxy is, by definition, the internet."""
+    # Two independent signals, either one is enough to say "not local": the
+    # process was told to listen beyond loopback, or a proxy touched the request.
+    if os.environ.get("HOST", "127.0.0.1") not in ("127.0.0.1", "localhost", "::1"):
+        return False
+    client = request.client.host if request.client else ""
+    return (client in ("127.0.0.1", "::1")
+            and not any(h in request.headers for h in _PROXY_HEADERS))
+
+
+def _access_token() -> str:
+    return os.environ.get("FIXPOINT_ACCESS_TOKEN", "")
+
+
+def _require_operator(request: Request) -> None:
+    """Gate for every mutating endpoint. Fails CLOSED:
+
+      token configured   -> the request must carry it (constant-time compare)
+      no token, local    -> allowed: the laptop workflow stays frictionless
+      no token, remote   -> refused: a deployment nobody secured is read-only
+
+    The third row is the important one — forgetting to set a secret must
+    produce a safe public showcase, never an open relay for someone's quota.
+    """
+    token = _access_token()
+    if token:
+        supplied = request.headers.get("x-fixpoint-token", "")
+        if not hmac.compare_digest(supplied.encode(), token.encode()):
+            raise HTTPException(401, "this action needs the deployment's access token")
+        return
+    if not _is_local(request):
+        raise HTTPException(403, "live fix runs are disabled on this deployment — "
+                                 "recorded runs are under Runs, or run Fixpoint locally")
+
+
 @app.get("/api/meta")
-def meta() -> dict:
-    """The diary vocabulary, so the frontend renders exactly what exists."""
-    return {"stages": list(STAGES), "events": list(EVENTS)}
+def meta(request: Request) -> dict:
+    """The diary vocabulary plus what THIS deployment lets this caller do, so
+    the frontend renders exactly what exists instead of buttons that 403."""
+    from fixpoint import github_app
+
+    token = bool(_access_token())
+    return {
+        "stages": list(STAGES), "events": list(EVENTS),
+        "fix": {"enabled": token or _is_local(request), "needs_token": token},
+        "pr": {"identity": "app" if github_app.configured() else "personal"},
+    }
 
 
 @app.get("/api/results")
@@ -210,31 +266,44 @@ def run_events(run_id: str) -> dict:
 
 
 @app.get("/api/runs/{run_id}/stream")
-async def run_stream(run_id: str) -> StreamingResponse:
+async def run_stream(run_id: str, request: Request) -> StreamingResponse:
     """SSE tail of a diary. Replays what exists, then follows appends until the
     terminal loop event lands. Same event shape as /api/runs/{id} — the
-    frontend renders live and replay through identical code."""
+    frontend renders live and replay through identical code.
+
+    Built to survive a hosting proxy. Model calls run for minutes with nothing
+    to say, and proxies drop connections that idle for ~60s — so silence is
+    filled with SSE comments, every event carries its index as `id:`, and a
+    reconnecting EventSource (which sends Last-Event-ID by itself) resumes
+    exactly after the last event it saw: no gap, no duplicated feed lines.
+    """
     path = RUNS / f"{run_id}.jsonl"
     if not path.exists() or path.parent != RUNS:
         raise HTTPException(404, "unknown run")
+    last_seen = request.headers.get("last-event-id", "")
+    start = int(last_seen) + 1 if last_seen.isdigit() else 0
 
     async def gen():
-        offset = 0
-        idle = 0.0
+        offset = start
+        idle = quiet = 0.0
         while True:
             for e in read(path)[offset:]:
+                yield f"id: {offset}\ndata: {json.dumps(vars(e))}\n\n"
                 offset += 1
-                idle = 0.0
-                yield f"data: {json.dumps(vars(e))}\n\n"
+                idle = quiet = 0.0
                 if e.stage == "loop":  # terminal
                     return
             await asyncio.sleep(0.5)
             idle += 0.5
-            if idle > 600:  # abandoned run; stop holding the connection
+            quiet += 0.5
+            if quiet >= 15:
+                yield ": keepalive\n\n"
+                quiet = 0.0
+            if idle > 1800:  # abandoned run; stop holding the connection
                 return
 
     return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache"})
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ---------------------------------------------------------------------------
@@ -242,14 +311,17 @@ async def run_stream(run_id: str) -> StreamingResponse:
 # ---------------------------------------------------------------------------
 
 @app.post("/api/fix")
-async def submit_fix(body: dict) -> dict:
+async def submit_fix(body: dict, request: Request) -> dict:
     from fixpoint import service
 
+    _require_operator(request)
     try:
         run_id = await asyncio.to_thread(
             service.start_fix,
             body.get("repo", ""), body.get("issue_text"), body.get("issue_url"),
             body.get("ref") or None, body.get("model") or None)
+    except service.Busy as e:
+        raise HTTPException(429, str(e)) from e
     except Exception as e:
         raise HTTPException(400, str(e)) from e
     return {"run_id": run_id}
@@ -267,12 +339,13 @@ def fix_meta(run_id: str) -> dict:
 
 
 @app.post("/api/fix/{run_id}/pr")
-async def fix_pr(run_id: str, body: dict) -> dict:
+async def fix_pr(run_id: str, body: dict, request: Request) -> dict:
     """Open (or dry-run) a PR carrying this run's patch — always on the
     authenticated user's own fork; fixpoint.pr refuses anything else."""
     from fixpoint import pr as pr_mod
     from fixpoint import service
 
+    _require_operator(request)
     meta = service.get_meta(run_id)
     if meta is None:
         raise HTTPException(404, "unknown fix run")
@@ -292,14 +365,26 @@ async def fix_pr(run_id: str, body: dict) -> dict:
             "dry_run": res.dry_run, "actor": res.actor}
 
 
+# One stylesheet, one script, no third-party anything: the policy can be strict.
+# (Inline styles are used by the templates in app.js; scripts never are.)
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'self' https://huggingface.co; "
+        "base-uri 'none'; form-action 'self'")
+
+
 @app.middleware("http")
-async def _no_stale_ui(request, call_next):
+async def _response_headers(request, call_next):
     """Static responses revalidate on every load. Without this, a browser that
     has ever seen the UI keeps its cached app.css/app.js indefinitely and
-    silently shows an old design — the ETag makes revalidation a cheap 304."""
+    silently shows an old design — the ETag makes revalidation a cheap 304.
+    Every response also gets the small set of hardening headers a public
+    deployment should never be without."""
     response = await call_next(request)
     if not request.url.path.startswith("/api"):
         response.headers["Cache-Control"] = "no-cache"
+        response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 
@@ -311,4 +396,15 @@ if WEB.exists():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")
+    from fixpoint import service
+
+    # No fix run can be alive before the server is: anything still open in the
+    # diaries lost its worker to a restart and needs an ending.
+    orphans = service.close_orphaned_runs()
+    if orphans:
+        print(f"closed {orphans} run(s) orphaned by the previous shutdown", flush=True)
+
+    # Loopback by default; a host sets HOST=0.0.0.0 and its own PORT.
+    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"),
+                port=int(os.environ.get("PORT", "8765")), log_level="warning",
+                proxy_headers=False)

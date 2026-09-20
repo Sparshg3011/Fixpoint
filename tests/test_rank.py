@@ -41,3 +41,12 @@ def test_no_mentions_degrades_to_pure_bm25():
     docs = [Document(path="pkg/a.py", text="widget widget"),
             Document(path="pkg/b.py", text="other")]
     assert ranked_files(docs, "widget misbehaves", k=1) == ["pkg/a.py"]
+
+
+def test_any_extension_mentions_serve_non_python_repos():
+    """Product-flow repos are multi-language: a named stylesheet must rank
+    first there, while the benchmark default stays .py-only."""
+    paths = ["styles.css", "site/app.js", "site/index.html", "README.md"]
+    issue = "The table in styles.css is too narrow, e.g. on v2.1 of the site."
+    assert mentioned_paths(issue, paths) == []  # benchmark definition: .py only
+    assert mentioned_paths(issue, paths, any_extension=True) == ["styles.css"]

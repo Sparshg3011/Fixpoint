@@ -22,7 +22,9 @@ so a submitted fix is watchable live at /#/runs/<run_id>.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -30,8 +32,9 @@ from pathlib import Path
 
 from fixpoint.agent.patcher import generate_patch
 from fixpoint.agent.secrets import load_env
-from fixpoint.diary import RUNS_DIR, Diary
-from fixpoint.eval.singleshot import git_apply_check
+from fixpoint.applycheck import git_apply_check
+from fixpoint.diary import RUNS_DIR, Diary, read
+from fixpoint.paths import REPOS_DIR
 from fixpoint.retrieval import load_corpus, tree_at
 from fixpoint.retrieval.corpus import CODE_EXTENSIONS
 from fixpoint.retrieval.guided import resolve_requested_paths
@@ -64,18 +67,110 @@ def fetch_issue(url: str) -> tuple[str, str]:
     return f"{owner}/{name}", f"{data.get('title', '')}\n\n{data.get('body') or ''}"
 
 
+# A ref is a branch, tag, or sha — never something git could read as an option.
+# On a public host this string arrives from the internet and lands in a git
+# argv, so it is validated by shape AND fenced off with `--`.
+_REF_RE = re.compile(r"[A-Za-z0-9][\w./-]{0,199}")
+
+
 def resolve_ref(repo: str, ref: str | None) -> str:
     """A commit sha for the requested ref (default branch HEAD when None)."""
+    if ref and not _REF_RE.fullmatch(ref):
+        raise ValueError(f"not a valid branch, tag, or commit: {ref!r}")
     if ref and re.fullmatch(r"[0-9a-f]{7,40}", ref):
         return ref
     target = ref or "HEAD"
-    out = subprocess.run(["git", "ls-remote", f"https://github.com/{repo}.git", target],
-                         capture_output=True, text=True, check=True).stdout
+    proc = subprocess.run(
+        ["git", "ls-remote", "--", f"https://github.com/{repo}.git", target],
+        capture_output=True, text=True,
+        # never block on a credential prompt: a private or missing repo must
+        # fail in a second, not hang a worker thread forever
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    if proc.returncode != 0:
+        # The honest reading of "git wanted a password": not public, or not there.
+        raise ValueError(f"could not read {repo} — check the spelling, and note that only "
+                         "PUBLIC repositories can be fixed from here")
+    out = proc.stdout
     for line in out.splitlines():
         sha, name = line.split("\t")
         if name == target or name.endswith(f"/{target}"):
             return sha
     raise ValueError(f"ref {target!r} not found on {repo}")
+
+
+class Busy(Exception):
+    """Every fix slot is taken — try again when a run finishes."""
+
+
+# Live fix runs hold a whole repo corpus in memory; a small host survives one
+# django-sized run, not three. The cap is enforced where runs start.
+_active = 0
+_active_lock = threading.Lock()
+
+
+def _max_concurrent() -> int:
+    return max(1, int(os.environ.get("FIXPOINT_MAX_CONCURRENT", "2")))
+
+
+def check_repo_size(repo: str) -> None:
+    """Refuse repos bigger than FIXPOINT_MAX_REPO_MB (unset = no cap).
+
+    A seatbelt for small host disks, not a security boundary — the access
+    token is that. So a GitHub API hiccup fails OPEN: better to attempt the
+    clone than to refuse a legitimate run because the size lookup was throttled.
+    """
+    cap = os.environ.get("FIXPOINT_MAX_REPO_MB")
+    if not cap:
+        return
+    import httpx
+
+    try:
+        r = httpx.get(f"https://api.github.com/repos/{repo}",
+                      headers={"Accept": "application/vnd.github+json"}, timeout=15)
+        size_mb = r.json().get("size", 0) / 1024 if r.status_code == 200 else 0
+    except (httpx.HTTPError, ValueError):
+        return
+    if size_mb > float(cap):
+        raise ValueError(f"{repo} is ~{size_mb:.0f} MB; this deployment caps repositories "
+                         f"at {cap} MB (run Fixpoint locally for larger ones)")
+
+
+def _trim_repo_cache() -> None:
+    """Evict least-recently-used repo mirrors beyond FIXPOINT_CACHE_MAX_MB."""
+    cap = os.environ.get("FIXPOINT_CACHE_MAX_MB")
+    bare = REPOS_DIR / "bare"
+    if not cap or not bare.exists():
+        return
+
+    def size_mb(d: Path) -> float:
+        return sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / 1e6
+
+    mirrors = sorted((d for d in bare.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime)
+    total = sum(size_mb(d) for d in mirrors)
+    while mirrors and total > float(cap):
+        victim = mirrors.pop(0)
+        total -= size_mb(victim)
+        shutil.rmtree(victim, ignore_errors=True)
+
+
+def close_orphaned_runs() -> int:
+    """Give every diary that lost its worker a terminal event.
+
+    Fix runs are threads inside the server process; a restart (deploys, host
+    auto-stop, a crash) kills them mid-flight and leaves a diary with no
+    ending — which the UI would show as "live" forever. Called once at server
+    startup, when by definition no run can still be alive.
+    """
+    closed = 0
+    for path in RUNS_DIR.glob("*.jsonl"):
+        events = read(path)
+        if not events or events[-1].stage == "loop":
+            continue
+        Diary(run_id=events[0].run_id, instance_id=events[0].instance_id).record(
+            "loop", "failed", green=False,
+            error="the server restarted while this run was in flight — start a fresh one")
+        closed += 1
+    return closed
 
 
 def fix_issue(repo: str, issue_text: str, commit: str, *,
@@ -100,7 +195,9 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
                 "error": "no supported source files found in this repository"}
 
     d.record("retrieval", "started", query_chars=len(issue_text))
-    ranked = ranked_files(docs, issue_text, k=k)
+    # any_extension: the corpus here is multi-language, so a named `styles.css`
+    # deserves the same priority the benchmark gives a named `views.py`.
+    ranked = ranked_files(docs, issue_text, k=k, any_extension=True)
     files = {p: by_path[p] for p in ranked}
     d.record("retrieval", "succeeded", files=ranked)
 
@@ -132,6 +229,11 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
                     f"verification tier: static (repo tests not executed)")
     d.record("loop", "succeeded" if applied else "failed",
              green=applied, attempts=attempts, verification="static")
+    if os.environ.get("FIXPOINT_EPHEMERAL_TREES"):
+        # Hosted disks are small and nothing downstream needs the extracted
+        # tree (the PR step works from the bare mirror). Locally the tree cache
+        # stays, because benchmark runs revisit the same commits constantly.
+        shutil.rmtree(tree, ignore_errors=True)
     return {"diff": patch.diff if patch else "", "applied": applied,
             "error": None if applied else (patch.error if patch else "no patch"),
             "files": list(files), "commit": commit}
@@ -159,6 +261,15 @@ def start_fix(repo_input: str, issue_text: str | None, issue_url: str | None,
     if not (issue_text or "").strip():
         raise ValueError("an issue description (or issue URL) is required")
     commit = resolve_ref(repo, ref)
+    check_repo_size(repo)
+
+    # Claim a slot only after validation, so a typo'd repo never burns one.
+    global _active
+    with _active_lock:
+        if _active >= _max_concurrent():
+            raise Busy(f"{_active} fix run(s) already in progress — this deployment runs "
+                       f"{_max_concurrent()} at a time; try again when one finishes")
+        _active += 1
 
     run_id = _safe_id(f"fix-{repo}-{int(time.time())}")
     meta = {"run_id": run_id, "repo": repo, "commit": commit,
@@ -176,9 +287,19 @@ def start_fix(repo_input: str, issue_text: str | None, issue_url: str | None,
         except Exception as e:  # surfaced in the diary, never lost to a thread
             diary.record("loop", "failed", green=False, error=str(e)[:500])
             meta.update(error=str(e)[:500])
+        finally:
+            global _active
+            with _active_lock:
+                _active -= 1
+            _trim_repo_cache()
         _meta_path(run_id).write_text(json.dumps(meta, indent=2))
 
-    threading.Thread(target=work, name=run_id, daemon=True).start()
+    try:
+        threading.Thread(target=work, name=run_id, daemon=True).start()
+    except BaseException:  # the slot must never leak if the thread cannot start
+        with _active_lock:
+            _active -= 1
+        raise
     return run_id
 
 
