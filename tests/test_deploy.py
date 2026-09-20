@@ -267,3 +267,10 @@ def test_the_image_fetches_single_commits_not_whole_histories():
     cost 11 minutes on a free instance — and on hosts whose filesystem is RAM,
     it costs memory too."""
     assert "FIXPOINT_SHALLOW_CLONES=1" in (ROOT / "Dockerfile").read_text()
+
+
+def test_the_image_gives_the_model_room_to_finish_a_large_repo():
+    """Measured on django (5 files, 116k tokens of input): at the library
+    default of 8000 the model is cut off mid-reasoning and emits no edits at
+    all, even after the doubling retry. At 16000 it lands the patch."""
+    assert "FIXPOINT_MAX_TOKENS=16000" in (ROOT / "Dockerfile").read_text()

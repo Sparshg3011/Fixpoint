@@ -42,6 +42,13 @@ ENV PYTHONUNBUFFERED=1 \
     FIXPOINT_CACHE_MAX_MB=2000 \
     FIXPOINT_MAX_CONCURRENT=1 \
     FIXPOINT_MAX_REPO_MB=400 \
+    # A product-flow prompt can carry five whole source files — django's were
+    # 116k tokens of input — and a reasoning model then needs room to think
+    # AND write. Measured on django: at 8000 it is cut off mid-thought and
+    # produces nothing; at 16000 it lands the patch. A cap costs nothing when
+    # unused, so small repositories are unaffected. Benchmark campaigns run
+    # outside this image and keep the 8000 their published numbers were made with.
+    FIXPOINT_MAX_TOKENS=16000 \
     FIXPOINT_BACKEND=openai \
     FIXPOINT_BASE_URL=https://integrate.api.nvidia.com/v1
 
