@@ -27,8 +27,9 @@ primary_region = "sjc"
 
 [[vm]]
   size = "shared-cpu-1x"
-  # BM25 over a django-sized corpus peaks well above 512 MB in pure Python.
-  memory = "1gb"
+  # Measured under a hard 512 MB limit: a django-sized run stays near 130 MiB
+  # of process memory. The rest of what `docker stats` shows is page cache.
+  memory = "512mb"
 
 [mounts]
   source = "fixpoint_state"

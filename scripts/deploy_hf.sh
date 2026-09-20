@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Deploy to a Hugging Face Docker Space (free tier: 2 vCPU / 16 GB, no card).
+# Deploy to a Hugging Face Docker Space. Docker Spaces are a PRO feature
+# ($9/month) — the free route is Render, see docs/DEPLOY.md.
 #
 #   scripts/deploy_hf.sh <hf-username>/<space-name>
 #

@@ -1,0 +1,24 @@
+# Render Blueprint: one free web service built from the Dockerfile.
+# Dashboard -> New -> Blueprint -> pick this repo. Walkthrough: docs/DEPLOY.md
+services:
+  - type: web
+    name: fixpoint
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/meta
+    envVars:
+      # Asked for once in the dashboard when the Blueprint is created; a value
+      # never lives in git.
+      - key: NVIDIA_API_KEY
+        sync: false
+      # Render invents this one. Read it under the service's Environment tab:
+      # it is the password the site asks for before starting a fix run.
+      - key: FIXPOINT_ACCESS_TOKEN
+        generateValue: true
+      - key: FIXPOINT_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b
+      # Memory is fine (django peaks near 130 MiB); the free instance's CPU is
+      # the limit. Cloning and indexing django took 11 minutes at 0.1 CPU, so
+      # keep repositories to a size that answers in a minute or two.
+      - key: FIXPOINT_MAX_REPO_MB
+        value: "120"

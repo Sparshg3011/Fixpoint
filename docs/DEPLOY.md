@@ -39,8 +39,15 @@ So a deployment where you forgot every secret is still safe. Capacity is
 bounded too: `FIXPOINT_MAX_CONCURRENT` (1 in the image) returns 429 beyond it,
 `FIXPOINT_MAX_REPO_MB` (400) refuses oversized repositories, extracted trees
 are dropped after each run, and the mirror cache is LRU-capped
-(`FIXPOINT_CACHE_MAX_MB`). Peak memory on a django-sized repository was
-measured at 484 MiB — hence the 1 GB VM below; 512 MB is not enough.
+(`FIXPOINT_CACHE_MAX_MB`).
+
+Memory is not the constraint it first looked like. Under a hard 512 MB limit
+with no swap, a django-sized run (1,859 indexed files) stays near 130 MiB of
+process memory and never touches the limit; the 484 MiB that `docker stats`
+once showed was page cache from the clone, which the kernel hands back. What a
+small host costs is *time*: at a tenth of a CPU, cloning and indexing django
+takes about eleven minutes before the model is even asked, where a small
+repository takes seconds.
 
 Only **public** repositories can be fixed from a host (there is no keychain
 there). PRs from a host are opened by the GitHub App — see
@@ -57,28 +64,34 @@ docker run --rm -p 8080:8080 -e NVIDIA_API_KEY -e FIXPOINT_ACCESS_TOKEN=choose-o
 (`-e NAME` with no value forwards the variable from your shell; `set -a; . ./.env; set +a`
 loads `.env` into the shell without echoing anything.)
 
-## Option A — Hugging Face Spaces (free, no card)
+## Option A — Render (free, no card)
 
-2 vCPU / 16 GB on the free tier, which is far more than this needs. Trade-offs:
-the Space sleeps after ~48 h without visitors (wakes on the next one), and
-there is no persistent disk — runs made on the Space vanish on restart, while
-the recorded replays are re-seeded from the image every boot.
+A free Render web service builds the Dockerfile straight from GitHub. What the
+free instance is, as of September 2026: 512 MB of RAM, asleep after 15 minutes
+without a request (the next visitor waits about a minute while it wakes), and
+no persistent disk — runs made on the host are gone after a sleep or redeploy,
+while the recorded replays are re-seeded from the image at every boot.
 
-1. Create the Space: *huggingface.co → New Space → SDK: **Docker** → Blank*, public.
-2. *Settings → Variables and secrets*, add **secrets**: `NVIDIA_API_KEY`,
-   `FIXPOINT_ACCESS_TOKEN` (generate one: `python -c "import secrets; print(secrets.token_urlsafe(24))"`),
-   and optionally the GitHub App trio (`FIXPOINT_GH_APP_ID`,
-   `FIXPOINT_GH_APP_KEY_B64` = `base64 < your-key.pem`, `FIXPOINT_GH_INSTALLATION_ID`).
-3. Deploy: `scripts/deploy_hf.sh <hf-username>/<space-name>` — git asks for your
-   HF username and a **write** token as the password.
+1. Sign in at render.com with GitHub. No payment method is asked for.
+2. Open [render.com/deploy?repo=…/Fixpoint](https://render.com/deploy?repo=https://github.com/Sparshg3011/Fixpoint)
+   (for a fork, swap in its URL; *New → Blueprint* in the dashboard is the same
+   thing). Render reads `render.yaml` and asks for one value, `NVIDIA_API_KEY`.
+   Paste it, *Apply*, and wait for the build.
+3. Open the service's *Environment* tab and copy `FIXPOINT_ACCESS_TOKEN` —
+   Render generated it. That is what the site asks for before a fix run.
 
-The Space repo is a build artifact: the script pushes only what the image
-needs plus the README front-matter Spaces requires.
+Every push to `main` redeploys. To publish PRs from the host, add the GitHub
+App trio in the same tab (`FIXPOINT_GH_APP_ID`, `FIXPOINT_GH_INSTALLATION_ID`,
+`FIXPOINT_GH_APP_KEY_B64` = `base64 < your-key.pem`) — see [GITHUB_APP.md](GITHUB_APP.md).
+
+`render.yaml` lowers `FIXPOINT_MAX_REPO_MB` to 120: the free instance's sliver
+of CPU makes bigger clones a test of patience, not of memory. Raise it if you
+don't mind the wait — the live view keeps the instance awake while you watch.
 
 ## Option B — Fly.io (a few dollars a month, persistent volume)
 
-Scale-to-zero VM with a 3 GB volume, so runs made on the host survive
-restarts and repo mirrors stay cached. Needs a card on file.
+Scale-to-zero VM with 512 MB of RAM and a 3 GB volume, so runs made on the host
+survive restarts and repo mirrors stay cached. Needs a card on file.
 
 ```bash
 brew install flyctl && fly auth login
@@ -91,6 +104,15 @@ fly deploy
 Note the token somewhere safe before it scrolls away (`fly secrets` never
 shows values again). For the GitHub App:
 `fly secrets set FIXPOINT_GH_APP_ID=… FIXPOINT_GH_INSTALLATION_ID=… FIXPOINT_GH_APP_KEY_B64="$(base64 < key.pem)"`.
+
+## Option C — Hugging Face Spaces (needs PRO)
+
+Docker Spaces used to be free; they are now part of PRO ($9/month). With PRO
+the hardware is generous (2 vCPU / 16 GB) and the flow is: create a *Docker →
+Blank* Space, add the same secrets under *Settings → Variables and secrets*,
+then `scripts/deploy_hf.sh <hf-username>/<space-name>` (git asks for your HF
+username and a **write** token). The Space repo is a build artifact: the script
+pushes only what the image needs plus the README front-matter Spaces requires.
 
 ## Operating notes
 
