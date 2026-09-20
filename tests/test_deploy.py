@@ -248,3 +248,22 @@ def test_the_render_blueprint_matches_the_app_and_carries_no_secret():
     for key, entry in env.items():
         if any(word in key for word in ("KEY", "TOKEN", "SECRET")):
             assert "value" not in entry, f"{key} must not carry a literal value"
+
+
+def test_the_cloud_run_recipe_sets_the_four_defaults_that_would_break_a_run():
+    """Cloud Run's defaults are wrong for this app in ways that surface as
+    Fixpoint bugs: runs cut off at 300s, a stream routed to an instance that
+    isn't running the job, a background thread frozen between requests, and a
+    checkout that counts against RAM because the filesystem is memory."""
+    script = (ROOT / "deploy" / "cloudrun.sh").read_text()
+    for flag in ("--timeout 3600", "--max-instances 1",
+                 "--no-cpu-throttling", "--memory 1Gi"):
+        assert flag in script, f"cloudrun.sh must pass {flag}"
+    assert "NVIDIA_API_KEY=" not in script.replace('NVIDIA_API_KEY="\\$KEY"', "")
+
+
+def test_the_image_fetches_single_commits_not_whole_histories():
+    """The hosted flow reads one commit. Cloning a decade of history instead
+    cost 11 minutes on a free instance — and on hosts whose filesystem is RAM,
+    it costs memory too."""
+    assert "FIXPOINT_SHALLOW_CLONES=1" in (ROOT / "Dockerfile").read_text()

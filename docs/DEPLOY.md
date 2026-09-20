@@ -44,10 +44,21 @@ are dropped after each run, and the mirror cache is LRU-capped
 Memory is not the constraint it first looked like. Under a hard 512 MB limit
 with no swap, a django-sized run (1,859 indexed files) peaks at 137 MiB of
 process memory and never touches the limit; the 484 MiB that `docker stats`
-once showed was page cache from the clone, which the kernel hands back. What a
-small host costs is *time*: at a tenth of a CPU, cloning and indexing django
-takes about eleven minutes before the model is even asked, where a small
-repository takes seconds.
+once showed was page cache from the clone, which the kernel hands back.
+
+CPU is the constraint, and most of it was self-inflicted. The image sets
+`FIXPOINT_SHALLOW_CLONES=1`, which fetches the single commit a run asked about
+instead of the repository's whole history. Measured on django at a tenth of a
+CPU, the worst case a free instance can be given:
+
+| | full mirror | single commit |
+|:---|---:|---:|
+| checkout + index | 540 s | 50 s |
+| first model call at | 662 s | 152 s |
+| mirror on disk | 283 MB | 12 MB |
+
+Benchmark campaigns keep the full mirror — they revisit dozens of commits per
+repository and would pay the fetch over and over.
 
 Only **public** repositories can be fixed from a host (there is no keychain
 there). PRs from a host are opened by the GitHub App — see
@@ -88,10 +99,33 @@ App trio in the same tab (`FIXPOINT_GH_APP_ID`, `FIXPOINT_GH_INSTALLATION_ID`,
 of CPU makes bigger clones a test of patience, not of memory. Raise it if you
 don't mind the wait — the live view keeps the instance awake while you watch.
 
-## Option B — Fly.io (a few dollars a month, persistent volume)
+## Option B — Google Cloud Run (free grant, ~10x the CPU, needs a card)
+
+Cloud Run's always-free grant (180,000 vCPU-seconds and 360,000 GiB-seconds a
+month) covers roughly a hundred runs, and gives a **full vCPU while a request
+is in flight** against Render's tenth of one. The catch is a billing account,
+so a card, even though this workload stays inside the grant. Set a spend cap —
+Cloud Run is one of the services they cover.
+
+```bash
+deploy/cloudrun.sh <your-gcp-project-id>
+```
+
+The script exists because four Cloud Run defaults break this app in ways that
+look like Fixpoint bugs: a 300-second request timeout cuts the live view off
+mid-run, autoscaling lets one instance stream a run another instance is doing,
+CPU is throttled to nearly zero between requests (so a background run freezes
+when nobody watches), and the "disk" is really RAM. It sets `--timeout=3600`,
+`--max-instances=1`, `--no-cpu-throttling` and `--memory=1Gi` accordingly, then
+prints the two commands that add your secrets without putting them in history.
+
+## Option C — Fly.io (a few dollars a month, persistent volume)
 
 Scale-to-zero VM with 512 MB of RAM and a 3 GB volume, so runs made on the host
-survive restarts and repo mirrors stay cached. Needs a card on file.
+survive restarts and repo mirrors stay cached. Needs a card on file. Note that
+`shared-cpu-1x` is billed a *baseline* slice of a core, so on CPU alone this is
+not an upgrade over Render's free instance — the volume is the reason to pick
+it.
 
 ```bash
 brew install flyctl && fly auth login
@@ -105,7 +139,7 @@ Note the token somewhere safe before it scrolls away (`fly secrets` never
 shows values again). For the GitHub App:
 `fly secrets set FIXPOINT_GH_APP_ID=… FIXPOINT_GH_INSTALLATION_ID=… FIXPOINT_GH_APP_KEY_B64="$(base64 < key.pem)"`.
 
-## Option C — Hugging Face Spaces (needs PRO)
+## Option D — Hugging Face Spaces (needs PRO)
 
 Docker Spaces used to be free; they are now part of PRO ($9/month). With PRO
 the hardware is generous (2 vCPU / 16 GB) and the flow is: create a *Docker →
