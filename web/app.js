@@ -324,13 +324,30 @@ async function showRun(runId) {
   $("#run-state").textContent = live ? "live" : "replay";
   $("#run-state").className = `chip ${live ? "chip-accent" : "chip-dim"}`;
   if (live) {
+    const state = $("#run-state");
     const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/stream`);
+    es.onopen = () => { state.textContent = "live"; state.className = "chip chip-accent"; };
     es.onmessage = (m) => {
       const e = JSON.parse(m.data);
       applyEvent(e);
-      if (e.stage === "loop") { es.close(); mountPRPanel(runId); }
+      if (e.stage === "loop") {
+        es.close();
+        state.textContent = e.detail?.green ? "finished" : "finished — no verified patch";
+        state.className = `chip ${e.detail?.green ? "chip-green" : "chip-red"}`;
+        mountPRPanel(runId);
+      }
     };
-    es.onerror = () => es.close();
+    // Hosting proxies drop quiet connections, and model calls are quiet for
+    // minutes. EventSource reconnects by itself and resumes after the last
+    // event id it saw, so a transient error needs patience, not a close().
+    // Only a CLOSED stream (the server refused it outright) is final.
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        state.textContent = "stream ended"; state.className = "chip chip-dim";
+      } else {
+        state.textContent = "reconnecting…"; state.className = "chip chip-amber";
+      }
+    };
     player = { stop: () => es.close() };
   } else {
     const { events } = await api(`/runs/${encodeURIComponent(runId)}`);
@@ -397,13 +414,46 @@ class Replayer {
 }
 
 /* ---------- new fix (the product flow) --------------------------------- */
+/* The operator token (hosted deployments only) lives for this tab's lifetime
+   and nowhere else; storage can be blocked, so every access is guarded. */
+const tokenStore = {
+  get() { try { return sessionStorage.getItem("fixpoint-token") || ""; } catch { return ""; } },
+  set(v) {
+    try { v ? sessionStorage.setItem("fixpoint-token", v) : sessionStorage.removeItem("fixpoint-token"); }
+    catch { /* private mode: the token simply is not remembered */ }
+  },
+};
+const authHeaders = () => {
+  const t = tokenStore.get();
+  return t ? { "X-Fixpoint-Token": t } : {};
+};
+
 async function showNewFix() {
-  view.innerHTML = `
+  const caps = await api("/meta");
+  const intro = `
     <h1>Fix an issue</h1>
     <p class="muted" style="margin:0 0 22px;max-width:640px">Point Fixpoint at any public
       GitHub repo and an issue. It clones the repo, finds the relevant files, writes a
       patch with bounded retries, verifies it applies with <span class="mono">git apply --check</span>,
-      and can open a PR — always on your own fork, never upstream.</p>
+      and can open a PR — always on a repository you control, never upstream.</p>`;
+
+  if (!caps.fix.enabled) {
+    // A public showcase with no operator token: say so plainly and point at
+    // what IS here, instead of rendering a form whose button can only 403.
+    view.innerHTML = `${intro}
+      <div class="panel" style="max-width:640px;padding:22px">
+        <span class="chip chip-amber">read-only deployment</span>
+        <p style="margin:14px 0 8px">Live fix runs are switched off on this public instance —
+          they spend the operator's model quota and clone repositories onto the host.</p>
+        <p class="muted" style="margin:0 0 16px">Every run under <a href="#/runs">Runs</a> is a real
+          recording you can replay, and the whole flow runs locally in a few minutes.</p>
+        <a class="fchip on" style="display:inline-block;text-decoration:none"
+           href="https://github.com/Sparshg3011/Fixpoint#quick-start" target="_blank" rel="noopener">Run it yourself ↗</a>
+      </div>`;
+    return;
+  }
+
+  view.innerHTML = `${intro}
     <form id="fixform" class="panel" style="max-width:640px;padding:22px;display:grid;gap:14px">
       <label>Repository <span class="muted">(owner/name or URL)</span>
         <input class="search" style="width:100%;margin-top:6px" name="repo"
@@ -416,7 +466,11 @@ async function showNewFix() {
                   name="issue_text" placeholder="What is broken, and how should it behave?"></textarea></label>
       <label>Ref <span class="muted">(branch, tag, or commit — default branch if empty)</span>
         <input class="search" style="width:100%;margin-top:6px" name="ref" placeholder="main"></label>
-      <div style="display:flex;align-items:center;gap:12px">
+      ${caps.fix.needs_token ? `
+      <label>Access token <span class="muted">(this deployment only runs fixes for its operator)</span>
+        <input class="search" style="width:100%;margin-top:6px" name="token" type="password"
+               autocomplete="off" value="${esc(tokenStore.get())}"></label>` : ""}
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <button class="fchip on" type="submit" style="padding:10px 22px;font-size:14px">Start fix run</button>
         <span id="fixerr" class="err" style="padding:0"></span>
       </div>
@@ -425,10 +479,12 @@ async function showNewFix() {
     e.preventDefault();
     const f = new FormData(e.target);
     const body = Object.fromEntries([...f.entries()].map(([k, v]) => [k, v.trim()]));
+    if ("token" in body) { tokenStore.set(body.token); delete body.token; }
     $("#fixerr").textContent = "";
     try {
       const r = await fetch("/api/fix", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || r.status);
       location.hash = `#/runs/${encodeURIComponent(data.run_id)}`;
@@ -441,6 +497,8 @@ async function mountPRPanel(runId) {
   const meta = await fetch(`/api/fix/${encodeURIComponent(runId)}`)
     .then((r) => (r.ok ? r.json() : null)).catch(() => null);
   if (!meta || !meta.has_diff) return;
+  const caps = await api("/meta").catch(() => null);
+  const canAct = caps && caps.fix.enabled;
   const el = document.createElement("div");
   el.className = "panel"; el.style.cssText = "margin-top:16px;padding:16px 18px";
   el.innerHTML = `
@@ -449,15 +507,23 @@ async function mountPRPanel(runId) {
         ${meta.applied ? "patch applies cleanly" : "patch did not verify"}</span>
       <span class="muted" style="font-size:13px">verification tier: static (git apply --check) —
         repo tests not executed</span>
-      <button class="fchip" id="pr-dry" style="margin-left:auto">Preview PR</button>
-      <button class="fchip on" id="pr-go" hidden>Create PR on my fork</button>
+      ${canAct ? `
+      ${caps.fix.needs_token && !tokenStore.get() ? `
+      <input class="search" id="pr-token" type="password" autocomplete="off"
+             placeholder="access token" style="margin-left:auto;width:180px">` : ""}
+      <button class="fchip" id="pr-dry" ${caps.fix.needs_token && !tokenStore.get() ? "" : 'style="margin-left:auto"'}>Preview PR</button>
+      <button class="fchip on" id="pr-go" hidden>Create PR</button>` : ""}
     </div>
     <pre id="pr-out" class="mono muted" style="font-size:12px;white-space:pre-wrap;margin:10px 0 0"></pre>`;
   $("#view").appendChild(el);
+  if (!canAct) return;
   const call = async (execute) => {
+    const typed = $("#pr-token");
+    if (typed && typed.value.trim()) tokenStore.set(typed.value.trim());
     $("#pr-out").textContent = execute ? "opening PR…" : "computing dry run…";
     const r = await fetch(`/api/fix/${encodeURIComponent(runId)}/pr`, { method: "POST",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ execute }) });
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ execute }) });
     const data = await r.json();
     if (!r.ok) { $("#pr-out").textContent = data.detail || `error ${r.status}`; return; }
     $("#pr-out").textContent = execute
