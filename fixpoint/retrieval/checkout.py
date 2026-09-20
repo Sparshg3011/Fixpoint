@@ -19,9 +19,10 @@ import subprocess
 import threading
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-BARE_DIR = REPO_ROOT / "data" / "repos" / "bare"
-TREE_DIR = REPO_ROOT / "data" / "repos" / "trees"
+from fixpoint.paths import REPOS_DIR  # FIXPOINT_STATE_DIR-aware
+
+BARE_DIR = REPOS_DIR / "bare"
+TREE_DIR = REPOS_DIR / "trees"
 
 # One lock per cache key. Benchmark runners chunk instances by repo, so two
 # workers hitting the SAME repo's first checkout simultaneously is the common

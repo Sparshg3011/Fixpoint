@@ -23,8 +23,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-RUNS_DIR = REPO_ROOT / "runs"
+from fixpoint.paths import RUNS_DIR  # FIXPOINT_STATE_DIR-aware
 
 # Closed vocabularies. The UI maps stages to avatars and events to visual state,
 # so adding a value here means touching the renderer too.
