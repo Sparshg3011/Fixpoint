@@ -53,7 +53,13 @@ patch. Dry runs still take zero outward actions.
 ## Fixing third-party projects
 
 The App can only write where it is installed, so for a project you don't own
-the pattern is: fork it, install the App on your fork, point Fixpoint at the
-fork. The PR lands in your fork for review; submitting it upstream stays a
-human decision. This is deliberate — a bot that files PRs into strangers'
+the pattern is: fork it and install the App on your fork. You can still point
+Fixpoint at the real project — when the App is not installed there, the PR
+flow looks for a repository it *can* write to that is a genuine fork of it
+(GitHub's own `parent` field, never a name match, so a same-named repository
+that is not a fork is refused) and opens the PR there instead. The PR body
+says which project the issue came from.
+
+The PR lands in your fork for review; submitting it upstream stays a human
+decision. This is deliberate — a bot that files PRs into strangers'
 repositories is how automation gets banned.

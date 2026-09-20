@@ -161,6 +161,31 @@ class AppClient:
                 return repos
             page += 1
 
+    def installed_fork_of(self, upstream: str) -> str | None:
+        """A repo the App CAN write to that is a real fork of `upstream`.
+
+        The documented way to fix someone else's project is: fork it, install
+        the App on your fork, and let the PR land there for review. Finding
+        that fork automatically is what makes the flow usable from a web UI,
+        where there is nowhere to type "…but publish it over there".
+
+        The parent check is the load-bearing part — matching on name alone
+        would happily publish into an unrelated repository that merely shares
+        a name with the project being fixed.
+        """
+        name = upstream.split("/")[-1].lower()
+        for repo in sorted(self.accessible_repos()):
+            if repo.split("/")[-1] != name or repo == upstream.lower():
+                continue
+            r = self._http.get(f"/repos/{repo}", headers=self._as_installation())
+            if r.status_code != 200:
+                continue
+            info = r.json()
+            parent = (info.get("parent") or {}).get("full_name", "")
+            if info.get("fork") and parent.lower() == upstream.lower():
+                return info["full_name"]
+        return None
+
     def assert_installed(self, repo: str) -> None:
         if repo.lower() not in self.accessible_repos():
             raise AppNotInstalledError(

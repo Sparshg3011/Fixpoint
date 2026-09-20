@@ -145,3 +145,50 @@ def test_push_credentials_use_basic_auth_not_bearer(keypair):
     scheme, creds = value.split("AUTHORIZATION: ")[1].split(" ")
     assert scheme == "basic"
     assert base64.b64decode(creds).decode() == f"x-access-token:{TOKEN}"
+
+
+def _forks_transport(calls, parent_of):
+    """GitHub where the App is installed on a handful of same-named repos."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        p = request.url.path
+        calls.append(p)
+        if p == "/app":
+            return httpx.Response(200, json={"slug": "fixpoint"})
+        if p == "/app/installations":
+            return httpx.Response(200, json=[{"id": 42}])
+        if p == "/app/installations/42/access_tokens":
+            return httpx.Response(201, json={"token": TOKEN})
+        if p == "/installation/repositories":
+            return httpx.Response(200, json={"repositories": [
+                {"full_name": "Sparshg3011/notes"},          # unrelated name
+                {"full_name": "Sparshg3011/requests"},       # same name — fork?
+            ]})
+        if p.startswith("/repos/"):
+            full = p[len("/repos/"):]
+            # GitHub answers with the repo's CANONICAL casing, not whatever
+            # casing the caller used — the PR then has to be opened on that.
+            canonical = {"sparshg3011/requests": "Sparshg3011/requests",
+                         "sparshg3011/notes": "Sparshg3011/notes"}.get(full.lower(), full)
+            parent = parent_of.get(full.lower())
+            if parent is None:
+                return httpx.Response(200, json={"full_name": canonical, "fork": False})
+            return httpx.Response(200, json={"full_name": canonical, "fork": True,
+                                             "parent": {"full_name": parent}})
+        return httpx.Response(404, json={"message": "not found"})
+    return httpx.MockTransport(handler)
+
+
+def test_a_real_fork_of_the_project_is_found(keypair):
+    """Fixing a project you don't own is meant to work by forking it — so the
+    PR flow has to locate that fork instead of refusing outright."""
+    client = ga.AppClient("123", keypair[0], "42",
+                          transport=_forks_transport([], {"sparshg3011/requests": "psf/requests"}))
+    assert client.installed_fork_of("psf/requests") == "Sparshg3011/requests"
+
+
+def test_a_same_named_repo_that_is_not_a_fork_is_refused(keypair):
+    """Name matching alone would publish somebody's agent patch into whatever
+    unrelated repo happens to share the project's name."""
+    client = ga.AppClient("123", keypair[0], "42",
+                          transport=_forks_transport([], {"sparshg3011/requests": "someone-else/requests"}))
+    assert client.installed_fork_of("psf/requests") is None
