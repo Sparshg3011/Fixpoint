@@ -31,3 +31,23 @@ jobs:
 
       - name: Tests
         run: pytest -q
+
+  # The hosted image installs deploy/requirements.txt, not pyproject — so it is
+  # booted for real here: it must come up, serve the snapshot, and refuse
+  # mutation when no access token is configured (the fail-closed default).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t fixpoint .
+
+      - name: Boot and probe
+        run: |
+          docker run -d --name fx -p 8080:8080 fixpoint
+          for i in $(seq 1 30); do curl -sf localhost:8080/api/meta >/dev/null && break; sleep 1; done
+          curl -sf localhost:8080/api/results | grep -q '"models"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/api/fix \
+                  -H 'Content-Type: application/json' -d '{"repo":"a/b","issue_text":"x"}')" = "403"
+          docker logs fx

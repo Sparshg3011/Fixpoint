@@ -1,0 +1,8 @@
+# Runtime dependencies of the HOSTED server — deliberately not pyproject's list.
+# The benchmark stack (datasets, swebench, anthropic) is a gigabyte the web app
+# never imports; tests/test_deploy.py fails if that ever stops being true.
+# Pinned to the versions the test suite runs against.
+fastapi==0.141.1
+uvicorn==0.52.3
+httpx==0.28.1
+PyJWT[crypto]==2.13.0

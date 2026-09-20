@@ -1,0 +1,36 @@
+# Fly.io deployment. `fly launch --copy-config --no-deploy` adopts this file
+# (pick your own app name when asked), then see docs/DEPLOY.md for secrets.
+app = "fixpoint"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  FIXPOINT_STATE_DIR = "/state"
+  FIXPOINT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero when nobody is looking; the first visitor wakes it in a few
+  # seconds. Runs orphaned by a stop are closed out at the next boot.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/meta"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # BM25 over a django-sized corpus peaks well above 512 MB in pure Python.
+  memory = "1gb"
+
+[mounts]
+  source = "fixpoint_state"
+  destination = "/state"
+  initial_size = "3gb"

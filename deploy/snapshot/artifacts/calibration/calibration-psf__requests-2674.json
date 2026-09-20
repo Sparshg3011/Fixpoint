@@ -1,0 +1,49 @@
+{
+  "tag": "psf__requests-2674",
+  "machine": "arm64",
+  "swebench_version": "4.1.0",
+  "namespace": "swebench",
+  "workers": 1,
+  "wall_s": 273.8,
+  "red": {
+    "psf__requests-2674": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 12,
+      "f2p_fail": 0,
+      "p2p_pass": 142,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    }
+  },
+  "green": {
+    "psf__requests-2674": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 12,
+      "f2p_fail": 0,
+      "p2p_pass": 142,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    }
+  },
+  "f2p_noise": {
+    "psf__requests-2674": [
+      "test_requests.py::RequestsTestCase::test_BASICAUTH_TUPLE_HTTP_200_OK_GET",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_GET_ALTERNATIVE",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_GET_WITH_PARAMS",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_HEAD",
+      "test_requests.py::RequestsTestCase::test_auth_is_retained_for_redirect_on_host",
+      "test_requests.py::RequestsTestCase::test_different_encodings_dont_break_post",
+      "test_requests.py::RequestsTestCase::test_manual_redirect_with_partial_body_read",
+      "test_requests.py::RequestsTestCase::test_mixed_case_scheme_acceptable",
+      "test_requests.py::RequestsTestCase::test_prepared_from_session",
+      "test_requests.py::RequestsTestCase::test_unicode_multipart_post",
+      "test_requests.py::TestTimeout::test_encoded_methods",
+      "test_requests.py::TestTimeout::test_none_timeout"
+    ]
+  },
+  "failures": [
+    "psf__requests-2674"
+  ]
+}

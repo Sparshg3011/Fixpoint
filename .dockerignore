@@ -1,0 +1,9 @@
+# Allowlist, not blocklist: the working tree holds ~14 GB of gitignored repo
+# mirrors and harness logs, and a build context must never pick them up by
+# accident. Everything is excluded unless named here.
+*
+!fixpoint/
+!web/
+!deploy/
+**/__pycache__
+**/*.pyc

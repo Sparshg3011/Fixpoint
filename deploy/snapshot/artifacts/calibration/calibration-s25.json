@@ -1,0 +1,705 @@
+{
+  "tag": "s25",
+  "machine": "arm64",
+  "swebench_version": "4.1.0",
+  "namespace": "swebench",
+  "workers": 3,
+  "wall_s": 2057.4,
+  "red": {
+    "astropy__astropy-14995": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 179,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "astropy/nddata/mixins/tests/test_ndarithmetic.py::test_nddata_bitmask_arithmetic"
+      ]
+    },
+    "django__django-10914": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 98,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_override_file_upload_permissions (test_utils.tests.OverrideSettingsTests)"
+      ]
+    },
+    "django__django-11630": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 2,
+      "p2p_pass": 16,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_collision_across_apps_database_routers_installed (check_framework.test_model_checks.DuplicateDBTableTests)",
+        "test_collision_in_same_app_database_routers_installed (check_framework.test_model_checks.DuplicateDBTableTests)"
+      ]
+    },
+    "django__django-12308": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 2,
+      "p2p_pass": 20,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_json_display_for_field (admin_utils.tests.UtilsTests)",
+        "test_label_for_field (admin_utils.tests.UtilsTests)"
+      ]
+    },
+    "django__django-13158": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 29,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_union_none (queries.test_qs_combinators.QuerySetSetOperationTests)"
+      ]
+    },
+    "django__django-13757": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 76,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_isnull_key (model_fields.test_jsonfield.TestQuerying)"
+      ]
+    },
+    "django__django-14672": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 168,
+      "p2p_pass": 0,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_multiple_autofields (invalid_models_tests.test_models.MultipleAutoFieldsTests)",
+        "test_db_column_clash (invalid_models_tests.test_models.FieldNamesTests)",
+        "test_ending_with_underscore (invalid_models_tests.test_models.FieldNamesTests)",
+        "test_including_separator (invalid_models_tests.test_models.FieldNamesTests)",
+        "test_pk (invalid_models_tests.test_models.FieldNamesTests)",
+        "test_check_jsonfield (invalid_models_tests.test_models.JSONFieldTests)",
+        "test_check_jsonfield_required_db_features (invalid_models_tests.test_models.JSONFieldTests)",
+        "test_ordering_pointing_to_json_field_value (invalid_models_tests.test_models.JSONFieldTests)",
+        "test_choices (m2m_through.tests.M2mThroughToFieldsTests)",
+        "test_retrieval (m2m_through.tests.M2mThroughToFieldsTests)",
+        "test_list_containing_non_iterable (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_non_iterable (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_non_list (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_pointing_to_fk (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_pointing_to_m2m (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_pointing_to_missing_field (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_valid_model (invalid_models_tests.test_models.UniqueTogetherTests)",
+        "test_list_containing_non_iterable (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_non_iterable (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_non_list (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_pointing_to_fk (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_pointing_to_m2m_field (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_pointing_to_missing_field (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_pointing_to_non_local_field (invalid_models_tests.test_models.IndexTogetherTests)",
+        "test_field_name_clash_with_child_accessor (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_field_name_clash_with_m2m_through (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_id_clash (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_inheritance_clash (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_multigeneration_inheritance (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_multiinheritance_clash (invalid_models_tests.test_models.ShadowingFieldsTests)",
+        "test_func_index (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_complex_expression_custom_lookup (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_pointing_to_fk (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_pointing_to_m2m_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_pointing_to_missing_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_pointing_to_missing_field_nested (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_pointing_to_non_local_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_func_index_required_db_features (invalid_models_tests.test_models.IndexesTests)",
+        "test_index_with_condition (invalid_models_tests.test_models.IndexesTests)",
+        "test_index_with_condition_required_db_features (invalid_models_tests.test_models.IndexesTests)",
+        "test_index_with_include (invalid_models_tests.test_models.IndexesTests)",
+        "test_index_with_include_required_db_features (invalid_models_tests.test_models.IndexesTests)",
+        "test_max_name_length (invalid_models_tests.test_models.IndexesTests)",
+        "test_name_constraints (invalid_models_tests.test_models.IndexesTests)",
+        "test_pointing_to_fk (invalid_models_tests.test_models.IndexesTests)",
+        "test_pointing_to_m2m_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_pointing_to_missing_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_pointing_to_non_local_field (invalid_models_tests.test_models.IndexesTests)",
+        "test_add_on_symmetrical_m2m_with_intermediate_model (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_empty_qs (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_non_symmetrical_both (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_non_symmetrical_clear_first_side (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_non_symmetrical_first_side (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_non_symmetrical_second_side (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_self_referential_symmetrical (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_set_on_symmetrical_m2m_with_intermediate_model (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_through_fields_self_referential (m2m_through.tests.M2mThroughReferentialTests)",
+        "test_just_order_with_respect_to_no_errors (invalid_models_tests.test_models.OtherModelTests)",
+        "test_just_ordering_no_errors (invalid_models_tests.test_models.OtherModelTests)",
+        "test_lazy_reference_checks (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_autogenerated_table_name_clash (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_autogenerated_table_name_clash_database_routers_installed (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_field_table_name_clash (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_field_table_name_clash_database_routers_installed (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_table_name_clash (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_table_name_clash_database_routers_installed (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_to_concrete_and_proxy_allowed (invalid_models_tests.test_models.OtherModelTests)",
+        "test_m2m_unmanaged_shadow_models_not_checked (invalid_models_tests.test_models.OtherModelTests)",
+        "test_name_beginning_with_underscore (invalid_models_tests.test_models.OtherModelTests)",
+        "test_name_contains_double_underscores (invalid_models_tests.test_models.OtherModelTests)",
+        "test_name_ending_with_underscore (invalid_models_tests.test_models.OtherModelTests)",
+        "test_non_valid (invalid_models_tests.test_models.OtherModelTests)",
+        "test_onetoone_with_explicit_parent_link_parent_model (invalid_models_tests.test_models.OtherModelTests)",
+        "test_onetoone_with_parent_model (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_allows_registered_lookups (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_non_iterable (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_multiple_times_to_model_fields (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_foreignkey_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_lookup_not_transform (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_missing_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_missing_foreignkey_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_missing_related_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_missing_related_model_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_non_related_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_related_model_pk (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_pointing_to_two_related_model_field (invalid_models_tests.test_models.OtherModelTests)",
+        "test_ordering_with_order_with_respect_to (invalid_models_tests.test_models.OtherModelTests)",
+        "test_property_and_related_field_accessor_clash (invalid_models_tests.test_models.OtherModelTests)",
+        "test_single_primary_key (invalid_models_tests.test_models.OtherModelTests)",
+        "test_swappable_missing_app (invalid_models_tests.test_models.OtherModelTests)",
+        "test_swappable_missing_app_name (invalid_models_tests.test_models.OtherModelTests)",
+        "test_two_m2m_through_same_model_with_different_through_fields (invalid_models_tests.test_models.OtherModelTests)",
+        "test_two_m2m_through_same_relationship (invalid_models_tests.test_models.OtherModelTests)",
+        "test_unique_primary_key (invalid_models_tests.test_models.OtherModelTests)",
+        "test_check_constraint_pointing_to_fk (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_joined_fields (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_joined_fields_complex_check (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_m2m_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_missing_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_non_local_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_pk (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_reverse_fk (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraint_pointing_to_reverse_o2o (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraints (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_check_constraints_required_db_features (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_deferrable_unique_constraint (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_deferrable_unique_constraint_required_db_features (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_expression_custom_lookup (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_pointing_to_fk (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_pointing_to_m2m_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_pointing_to_missing_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_pointing_to_missing_field_nested (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_pointing_to_non_local_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_func_unique_constraint_required_db_features (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_condition_pointing_to_joined_fields (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_condition_pointing_to_missing_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_pointing_to_fk (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_pointing_to_m2m_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_pointing_to_missing_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_pointing_to_non_local_field (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_pointing_to_reverse_o2o (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_with_condition (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_with_condition_required_db_features (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_with_include (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_unique_constraint_with_include_required_db_features (invalid_models_tests.test_models.ConstraintsTests)",
+        "test_add_on_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_add_on_m2m_with_intermediate_model_callable_through_default (m2m_through.tests.M2mThroughTests)",
+        "test_add_on_m2m_with_intermediate_model_value_required (m2m_through.tests.M2mThroughTests)",
+        "test_add_on_m2m_with_intermediate_model_value_required_fails (m2m_through.tests.M2mThroughTests)",
+        "test_add_on_reverse_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_clear_on_reverse_removes_all_the_m2m_relationships (m2m_through.tests.M2mThroughTests)",
+        "test_clear_removes_all_the_m2m_relationships (m2m_through.tests.M2mThroughTests)",
+        "test_create_on_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_create_on_m2m_with_intermediate_model_callable_through_default (m2m_through.tests.M2mThroughTests)",
+        "test_create_on_m2m_with_intermediate_model_value_required (m2m_through.tests.M2mThroughTests)",
+        "test_create_on_m2m_with_intermediate_model_value_required_fails (m2m_through.tests.M2mThroughTests)",
+        "test_create_on_reverse_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_custom_related_name_doesnt_conflict_with_fky_related_name (m2m_through.tests.M2mThroughTests)",
+        "test_custom_related_name_forward_empty_qs (m2m_through.tests.M2mThroughTests)",
+        "test_custom_related_name_forward_non_empty_qs (m2m_through.tests.M2mThroughTests)",
+        "test_custom_related_name_reverse_empty_qs (m2m_through.tests.M2mThroughTests)",
+        "test_custom_related_name_reverse_non_empty_qs (m2m_through.tests.M2mThroughTests)",
+        "test_filter_on_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_get_on_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_get_or_create_on_m2m_with_intermediate_model_value_required (m2m_through.tests.M2mThroughTests)",
+        "test_get_or_create_on_m2m_with_intermediate_model_value_required_fails (m2m_through.tests.M2mThroughTests)",
+        "test_order_by_relational_field_through_model (m2m_through.tests.M2mThroughTests)",
+        "test_query_first_model_by_intermediate_model_attribute (m2m_through.tests.M2mThroughTests)",
+        "test_query_model_by_attribute_name_of_related_model (m2m_through.tests.M2mThroughTests)",
+        "test_query_model_by_custom_related_name (m2m_through.tests.M2mThroughTests)",
+        "test_query_model_by_intermediate_can_return_non_unique_queryset (m2m_through.tests.M2mThroughTests)",
+        "test_query_model_by_related_model_name (m2m_through.tests.M2mThroughTests)",
+        "test_query_second_model_by_intermediate_model_attribute (m2m_through.tests.M2mThroughTests)",
+        "test_remove_on_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_remove_on_m2m_with_intermediate_model_multiple (m2m_through.tests.M2mThroughTests)",
+        "test_remove_on_reverse_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_retrieve_intermediate_items (m2m_through.tests.M2mThroughTests)",
+        "test_retrieve_reverse_intermediate_items (m2m_through.tests.M2mThroughTests)",
+        "test_reverse_inherited_m2m_with_through_fields_list_hashable (m2m_through.tests.M2mThroughTests)",
+        "test_set_on_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "test_set_on_m2m_with_intermediate_model_callable_through_default (m2m_through.tests.M2mThroughTests)",
+        "test_set_on_m2m_with_intermediate_model_value_required (m2m_through.tests.M2mThroughTests)",
+        "test_set_on_m2m_with_intermediate_model_value_required_fails (m2m_through.tests.M2mThroughTests)",
+        "test_set_on_reverse_m2m_with_intermediate_model (m2m_through.tests.M2mThroughTests)",
+        "Relations with intermediary tables with multiple FKs",
+        "test_update_or_create_on_m2m_with_intermediate_model_value_required (m2m_through.tests.M2mThroughTests)",
+        "test_update_or_create_on_m2m_with_intermediate_model_value_required_fails (m2m_through.tests.M2mThroughTests)"
+      ]
+    },
+    "django__django-15388": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 9,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_non_template_changed_in_template_directory (template_tests.test_autoreloader.TemplateReloadTests)"
+      ]
+    },
+    "django__django-16046": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 6,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_empty (utils_tests.test_numberformat.TestNumberFormat)"
+      ]
+    },
+    "django__django-17087": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 53,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_serialize_nested_class_method (migrations.test_writer.WriterTests.test_serialize_nested_class_method)"
+      ]
+    },
+    "matplotlib__matplotlib-24149": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 767,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "lib/matplotlib/tests/test_axes.py::test_bar_all_nan[png]"
+      ]
+    },
+    "mwaskom__seaborn-3190": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 84,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "tests/_core/test_scales.py::TestContinuous::test_interval_with_bools"
+      ]
+    },
+    "pallets__flask-4992": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 18,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "tests/test_config.py::test_config_from_file_toml"
+      ]
+    },
+    "psf__requests-2674": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 12,
+      "f2p_fail": 0,
+      "p2p_pass": 142,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "pydata__xarray-4248": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 18,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "xarray/tests/test_formatting.py::test_inline_variable_array_repr_custom_repr"
+      ]
+    },
+    "pylint-dev__pylint-7114": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 56,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "tests/lint/unittest_lint.py::test_identically_named_nested_module"
+      ]
+    },
+    "pytest-dev__pytest-6116": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 2,
+      "p2p_pass": 69,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "testing/test_collection.py::TestCustomConftests::test_pytest_fs_collect_hooks_are_seen",
+        "testing/test_collection.py::TestCustomConftests::test_pytest_collect_file_from_sister_dir"
+      ]
+    },
+    "scikit-learn__scikit-learn-13584": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 6,
+      "p2p_pass": 3,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "sklearn/utils/tests/test_pprint.py::test_changed_only",
+        "sklearn/utils/tests/test_pprint.py::test_pipeline",
+        "sklearn/utils/tests/test_pprint.py::test_deeply_nested",
+        "sklearn/utils/tests/test_pprint.py::test_gridsearch",
+        "sklearn/utils/tests/test_pprint.py::test_gridsearch_pipeline",
+        "sklearn/utils/tests/test_pprint.py::test_n_max_elements_to_show"
+      ]
+    },
+    "sphinx-doc__sphinx-8435": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 16,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "tests/test_ext_autodoc_configs.py::test_autodoc_type_aliases"
+      ]
+    },
+    "sympy__sympy-11400": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 2,
+      "p2p_pass": 29,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_ccode_Relational",
+        "test_ccode_sinc"
+      ]
+    },
+    "sympy__sympy-13647": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 76,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_col_insert"
+      ]
+    },
+    "sympy__sympy-15609": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 121,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_MatrixElement_printing"
+      ]
+    },
+    "sympy__sympy-18621": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 15,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_issue_18618"
+      ]
+    },
+    "sympy__sympy-21379": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 91,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_Mod"
+      ]
+    },
+    "sympy__sympy-24909": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 0,
+      "f2p_fail": 1,
+      "p2p_pass": 2,
+      "p2p_fail": 0,
+      "f2p_failing_tests": [
+        "test_prefix_operations"
+      ]
+    }
+  },
+  "green": {
+    "astropy__astropy-14995": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 179,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-10914": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 98,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-11630": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 2,
+      "f2p_fail": 0,
+      "p2p_pass": 16,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-12308": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 2,
+      "f2p_fail": 0,
+      "p2p_pass": 20,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-13158": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 29,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-13757": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 76,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-14672": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 168,
+      "f2p_fail": 0,
+      "p2p_pass": 0,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-15388": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 9,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-16046": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 6,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "django__django-17087": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 53,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "matplotlib__matplotlib-24149": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 767,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "mwaskom__seaborn-3190": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 84,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "pallets__flask-4992": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 18,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "psf__requests-2674": {
+      "applied": true,
+      "resolved": false,
+      "f2p_pass": 12,
+      "f2p_fail": 0,
+      "p2p_pass": 141,
+      "p2p_fail": 1,
+      "f2p_failing_tests": []
+    },
+    "pydata__xarray-4248": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 18,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "pylint-dev__pylint-7114": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 56,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "pytest-dev__pytest-6116": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 2,
+      "f2p_fail": 0,
+      "p2p_pass": 69,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "scikit-learn__scikit-learn-13584": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 6,
+      "f2p_fail": 0,
+      "p2p_pass": 3,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sphinx-doc__sphinx-8435": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 16,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-11400": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 2,
+      "f2p_fail": 0,
+      "p2p_pass": 29,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-13647": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 76,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-15609": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 121,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-18621": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 15,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-21379": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 91,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    },
+    "sympy__sympy-24909": {
+      "applied": true,
+      "resolved": true,
+      "f2p_pass": 1,
+      "f2p_fail": 0,
+      "p2p_pass": 2,
+      "p2p_fail": 0,
+      "f2p_failing_tests": []
+    }
+  },
+  "f2p_noise": {
+    "psf__requests-2674": [
+      "test_requests.py::RequestsTestCase::test_BASICAUTH_TUPLE_HTTP_200_OK_GET",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_GET_ALTERNATIVE",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_GET_WITH_PARAMS",
+      "test_requests.py::RequestsTestCase::test_HTTP_200_OK_HEAD",
+      "test_requests.py::RequestsTestCase::test_auth_is_retained_for_redirect_on_host",
+      "test_requests.py::RequestsTestCase::test_different_encodings_dont_break_post",
+      "test_requests.py::RequestsTestCase::test_manual_redirect_with_partial_body_read",
+      "test_requests.py::RequestsTestCase::test_mixed_case_scheme_acceptable",
+      "test_requests.py::RequestsTestCase::test_prepared_from_session",
+      "test_requests.py::RequestsTestCase::test_unicode_multipart_post",
+      "test_requests.py::TestTimeout::test_encoded_methods",
+      "test_requests.py::TestTimeout::test_none_timeout"
+    ]
+  },
+  "failures": [
+    "psf__requests-2674"
+  ]
+}

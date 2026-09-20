@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-sandboxed-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![pytest](https://img.shields.io/badge/tests-138_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](#results--proof)
+[![pytest](https://img.shields.io/badge/tests-164_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](#results--proof)
 [![SWE-bench](https://img.shields.io/badge/SWE--bench_Verified-64%25_at_$0-3FB950?style=for-the-badge)](#results--proof)
 [![CI](https://img.shields.io/github/actions/workflow/status/Sparshg3011/Fixpoint/ci.yml?style=for-the-badge&label=CI)](https://github.com/Sparshg3011/Fixpoint/actions)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -129,7 +129,7 @@ And the hermetic suite (no network, no Docker, no API key):
 
 ```text
 $ python -m pytest -q
-138 passed in 1.20s
+164 passed in 2.72s
 ```
 
 ---
@@ -222,7 +222,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # free API key from build.nvidia.com → .env (gitignored)
 printf 'NVIDIA_API_KEY=nvapi-…\nFIXPOINT_BACKEND=openai\nFIXPOINT_BASE_URL=https://integrate.api.nvidia.com/v1\n' > .env
 
-.venv/bin/python -m pytest        # 138 hermetic tests, no API key needed
+.venv/bin/python -m pytest        # 164 hermetic tests, no API key needed
 .venv/bin/python -m fixpoint.server   # UI at http://localhost:8765
 ```
 
@@ -230,6 +230,13 @@ Run a shell-agent benchmark campaign (requires Docker; images pull on demand):
 
 ```bash
 python scripts/run_shell_bench.py --n 25 --model nvidia/nemotron-3-ultra-550b-a55b
+```
+
+Or run the hosted image — scoreboard, replays, and token-gated live runs in one
+small container ([docs/DEPLOY.md](docs/DEPLOY.md)):
+
+```bash
+docker build -t fixpoint . && docker run --rm -p 8080:8080 fixpoint
 ```
 
 Grade any prediction file with the official harness, resumably:
@@ -269,6 +276,7 @@ Each doc records what was measured, what broke, and why:
 | document | what it records |
 |:---|:---|
 | [docs/RESULTS.md](docs/RESULTS.md) | The complete results ladder, every configuration ever benchmarked |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Hosting it: the fail-closed access gate, the artifact snapshot, two host recipes |
 | [docs/PLAN.md](docs/PLAN.md) | The build plan and its crux-first sequencing |
 | [docs/CALIBRATION.md](docs/CALIBRATION.md) | Red/green harness calibration; the one flaky instance |
 | [docs/RETRIEVAL.md](docs/RETRIEVAL.md) | BM25 from scratch, recall taxonomy, the mention-ranking win |
