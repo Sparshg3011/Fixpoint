@@ -61,9 +61,33 @@ def mentioned_paths(text: str, corpus_paths: Iterable[str], cap: int = _MENTION_
     return hits
 
 
+# Prose explains the code; the fix almost always goes in the code. Left alone,
+# BM25 over an English issue prefers English files: on django, a report about
+# QuerySet.none() ranked five documentation pages and not a single module.
+_PROSE_SUFFIXES = (".md", ".rst", ".txt")
+
+
 def ranked_files(docs: list[Document], query: str, k: int,
-                 any_extension: bool = False) -> list[str]:
-    """Top-k candidate files: unique issue mentions first, BM25 after."""
+                 any_extension: bool = False, prose_cap: int | None = None) -> list[str]:
+    """Top-k candidate files: unique issue mentions first, BM25 after.
+
+    `prose_cap` bounds how many BM25 slots documentation may take. Mentions
+    are exempt (an issue that names README.md gets README.md), and held-back
+    prose still fills whatever slots code cannot, so a docs-only repository
+    ranks exactly as it would without the cap. None = no cap — the benchmark
+    corpus is .py-only and its published numbers never saw this rule.
+    """
     mentions = mentioned_paths(query, (d.path for d in docs), any_extension=any_extension)
-    ranked = [p for p, _ in BM25Searcher(docs).search(query, k=k)]
-    return (mentions + [p for p in ranked if p not in mentions])[:k]
+    depth = k if prose_cap is None else len(docs)
+    ranked = [p for p, _ in BM25Searcher(docs).search(query, k=depth) if p not in mentions]
+    if prose_cap is not None:
+        kept: list[str] = []
+        held: list[str] = []
+        for p in ranked:
+            is_prose = p.lower().endswith(_PROSE_SUFFIXES)
+            if is_prose and sum(q.lower().endswith(_PROSE_SUFFIXES) for q in kept) >= prose_cap:
+                held.append(p)
+            else:
+                kept.append(p)
+        ranked = kept + held
+    return (mentions + ranked)[:k]

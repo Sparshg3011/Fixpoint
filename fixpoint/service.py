@@ -197,7 +197,9 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
     d.record("retrieval", "started", query_chars=len(issue_text))
     # any_extension: the corpus here is multi-language, so a named `styles.css`
     # deserves the same priority the benchmark gives a named `views.py`.
-    ranked = ranked_files(docs, issue_text, k=k, any_extension=True)
+    # prose_cap: documentation reads like the issue and would crowd the code
+    # out of every slot; one page may stay for context.
+    ranked = ranked_files(docs, issue_text, k=k, any_extension=True, prose_cap=1)
     files = {p: by_path[p] for p in ranked}
     d.record("retrieval", "succeeded", files=ranked)
 
