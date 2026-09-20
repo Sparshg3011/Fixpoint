@@ -27,7 +27,7 @@ primary_region = "sjc"
 
 [[vm]]
   size = "shared-cpu-1x"
-  # Measured under a hard 512 MB limit: a django-sized run stays near 130 MiB
+  # Measured under a hard 512 MB limit: a django-sized run peaks at 137 MiB
   # of process memory. The rest of what `docker stats` shows is page cache.
   memory = "512mb"
 

@@ -17,7 +17,7 @@ services:
         generateValue: true
       - key: FIXPOINT_MODEL
         value: nvidia/nemotron-3-ultra-550b-a55b
-      # Memory is fine (django peaks near 130 MiB); the free instance's CPU is
+      # Memory is fine (django peaks at 137 MiB); the free instance's CPU is
       # the limit. Cloning and indexing django took 11 minutes at 0.1 CPU, so
       # keep repositories to a size that answers in a minute or two.
       - key: FIXPOINT_MAX_REPO_MB

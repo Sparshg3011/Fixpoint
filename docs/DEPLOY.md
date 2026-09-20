@@ -42,7 +42,7 @@ are dropped after each run, and the mirror cache is LRU-capped
 (`FIXPOINT_CACHE_MAX_MB`).
 
 Memory is not the constraint it first looked like. Under a hard 512 MB limit
-with no swap, a django-sized run (1,859 indexed files) stays near 130 MiB of
+with no swap, a django-sized run (1,859 indexed files) peaks at 137 MiB of
 process memory and never touches the limit; the 484 MiB that `docker stats`
 once showed was page cache from the clone, which the kernel hands back. What a
 small host costs is *time*: at a tenth of a CPU, cloning and indexing django
