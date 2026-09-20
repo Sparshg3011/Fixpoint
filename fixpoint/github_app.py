@@ -28,6 +28,7 @@ Configuration (in .env or host secrets, never in commands or logs):
 
 from __future__ import annotations
 
+import base64
 import os
 import time
 from pathlib import Path
@@ -171,8 +172,15 @@ class AppClient:
     def push_config(self) -> list[str]:
         """`git -c` arguments that authenticate a push over HTTPS. The token
         rides in a header, so it never appears in a remote URL — and therefore
-        never in git's error messages or any log that quotes them."""
-        return ["-c", f"http.https://github.com/.extraheader=AUTHORIZATION: bearer {self.token()}"]
+        never in a remote's stored config or a URL-quoting log line.
+
+        Basic, not bearer: `bearer` authenticates the REST API, but git's HTTP
+        transport is refused with "invalid credentials" unless the token is
+        presented as the password of a basic-auth pair. The username is a
+        fixed sentinel GitHub requires for installation tokens.
+        """
+        creds = base64.b64encode(f"x-access-token:{self.token()}".encode()).decode()
+        return ["-c", f"http.https://github.com/.extraheader=AUTHORIZATION: basic {creds}"]
 
     def create_pr(self, repo: str, *, base: str, head: str, title: str, body: str) -> str:
         r = self._http.post(f"/repos/{repo}/pulls", headers=self._as_installation(),

@@ -5,6 +5,8 @@ contract is exercised without a network, and the App private key is generated
 in-test so no real credential ever touches the suite.
 """
 
+import base64
+
 import httpx
 import jwt
 import pytest
@@ -84,7 +86,7 @@ def test_bot_identity_carries_the_apps_avatar(keypair):
 def test_token_travels_in_a_header_never_a_url(keypair):
     cfg = make_client(keypair, []).push_config()
     assert cfg[0] == "-c"
-    assert cfg[1].startswith("http.https://github.com/.extraheader=AUTHORIZATION: bearer ")
+    assert cfg[1].startswith("http.https://github.com/.extraheader=AUTHORIZATION: basic ")
 
 
 def test_app_mode_dry_run_takes_no_outward_action(keypair, monkeypatch, tmp_path):
@@ -110,7 +112,7 @@ def test_app_mode_execute_pushes_with_header_auth_and_opens_the_pr(keypair, monk
     pushes = [a for a in git_calls if "push" in a]
     assert len(pushes) == 2  # base branch, then fix branch
     for a in pushes:
-        assert a[0] == "-c" and "AUTHORIZATION: bearer" in a[1]  # header auth
+        assert a[0] == "-c" and "AUTHORIZATION: basic" in a[1]  # header auth
         assert all(TOKEN not in x for x in a if x.startswith("https://"))  # clean URLs
     assert ("POST", "/repos/Sparshg3011/demo/pulls") in calls
     # commits are attributed to the bot, not to a placeholder author
@@ -129,3 +131,17 @@ def test_personal_mode_is_the_default_when_no_app_is_configured(monkeypatch):
     for k in ("FIXPOINT_GH_APP_ID", "FIXPOINT_GH_APP_KEY"):
         monkeypatch.delenv(k, raising=False)
     assert ga.client_if_configured() is None
+
+
+def test_push_credentials_use_basic_auth_not_bearer(keypair):
+    """git's HTTP transport rejects `bearer` with "invalid credentials" — only
+    the REST API accepts it (observed for real against github.com). The token
+    must ride as the password of a basic-auth pair under the sentinel username
+    GitHub mandates for installation tokens."""
+    flag, value = make_client(keypair, []).push_config()
+
+    assert flag == "-c"
+    assert "bearer" not in value.lower()
+    scheme, creds = value.split("AUTHORIZATION: ")[1].split(" ")
+    assert scheme == "basic"
+    assert base64.b64decode(creds).decode() == f"x-access-token:{TOKEN}"

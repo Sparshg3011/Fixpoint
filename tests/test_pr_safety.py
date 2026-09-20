@@ -103,3 +103,16 @@ def test_model_names_with_slashes_map_to_the_harness_directory_form():
     from fixpoint.harness.official import safe_model_name
     assert safe_model_name("fixpoint-singleshot-z-ai/glm-5.2") == "fixpoint-singleshot-z-ai__glm-5.2"
     assert safe_model_name("claude-sonnet-5") == "claude-sonnet-5"
+
+
+def test_a_failing_push_never_prints_the_token():
+    """A failing git command puts its whole argv in the exception — which is
+    how a live credential ends up pasted into a bug report. Observed for real
+    when a push was rejected."""
+    with pytest.raises(RuntimeError) as err:
+        pr_mod._git("-c", "http.https://github.com/.extraheader=AUTHORIZATION: basic c2VjcmV0",
+                    "push", "nowhere-at-all", cwd=None)
+
+    message = str(err.value)
+    assert "c2VjcmV0" not in message
+    assert "<redacted>" in message
