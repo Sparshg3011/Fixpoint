@@ -327,11 +327,17 @@ async function showRun(runId) {
     const state = $("#run-state");
     const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/stream`);
     es.onopen = () => { state.textContent = "live"; state.className = "chip chip-accent"; };
+    // Scale-to-zero hosts judge idleness by *inbound* requests, and one long
+    // event stream is not that: a run outlasting the idle window would be
+    // put to sleep mid-flight. A tiny request every few minutes keeps the
+    // host awake exactly as long as someone is watching a live run.
+    const awake = setInterval(() => { fetch("/api/meta").catch(() => {}); }, 4 * 60 * 1000);
     es.onmessage = (m) => {
       const e = JSON.parse(m.data);
       applyEvent(e);
       if (e.stage === "loop") {
         es.close();
+        clearInterval(awake);
         state.textContent = e.detail?.green ? "finished" : "finished — no verified patch";
         state.className = `chip ${e.detail?.green ? "chip-green" : "chip-red"}`;
         mountPRPanel(runId);
@@ -348,7 +354,7 @@ async function showRun(runId) {
         state.textContent = "reconnecting…"; state.className = "chip chip-amber";
       }
     };
-    player = { stop: () => es.close() };
+    player = { stop: () => { es.close(); clearInterval(awake); } };
   } else {
     const { events } = await api(`/runs/${encodeURIComponent(runId)}`);
     player = new Replayer(events);

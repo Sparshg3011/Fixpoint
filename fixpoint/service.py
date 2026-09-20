@@ -205,6 +205,8 @@ def fix_issue(repo: str, issue_text: str, commit: str, *,
 
     patch, feedback = None, None
     for attempt in range(1, attempts + 1):
+        # The model call is minutes of silence; say who is working meanwhile.
+        d.record("developer", "started", attempt=attempt, files=len(files))
         patch = generate_patch(issue_text, files, feedback=feedback, corpus=by_path, **kwargs)
         # The model asking for an unseen file is a localization hypothesis —
         # honor it once per attempt (measured: 2/5 such requests were the
