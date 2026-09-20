@@ -135,7 +135,7 @@ And the hermetic suite (no network, no Docker, no API key):
 
 ```text
 $ python -m pytest -q
-176 passed in 6.40s
+180 passed in 5.74s
 ```
 
 ---
@@ -228,7 +228,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # free API key from build.nvidia.com → .env (gitignored)
 printf 'NVIDIA_API_KEY=nvapi-…\nFIXPOINT_BACKEND=openai\nFIXPOINT_BASE_URL=https://integrate.api.nvidia.com/v1\n' > .env
 
-.venv/bin/python -m pytest        # 176 hermetic tests, no API key needed
+.venv/bin/python -m pytest        # 180 hermetic tests, no API key needed
 .venv/bin/python -m fixpoint.server   # UI at http://localhost:8765
 ```
 
