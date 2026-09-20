@@ -49,7 +49,7 @@ def test_dry_run_takes_no_outward_action(monkeypatch, tmp_path):
             calls.append(("push", args))
         return ""
     monkeypatch.setattr(pr_mod, "_git", fake_git)
-    monkeypatch.setattr(pr_mod, "bare_path", lambda repo: tmp_path)
+    monkeypatch.setattr(pr_mod, "ensure_commit", lambda repo, commit: tmp_path)
     monkeypatch.setattr(pr_mod.subprocess, "run",
                         lambda *a, **k: type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})())
 

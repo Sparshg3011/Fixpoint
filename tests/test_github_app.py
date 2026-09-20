@@ -55,7 +55,7 @@ def make_client(keypair, calls):
 def _quiet_git(monkeypatch, tmp_path, git_calls):
     """Fake out every process the PR flow would spawn; record git invocations."""
     monkeypatch.setattr(pr_mod, "_git", lambda *args, cwd=None: git_calls.append(args) or "")
-    monkeypatch.setattr(pr_mod, "bare_path", lambda repo: tmp_path)
+    monkeypatch.setattr(pr_mod, "ensure_commit", lambda repo, commit: tmp_path)
     monkeypatch.setattr(pr_mod.subprocess, "run",
                         lambda *a, **k: type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})())
 

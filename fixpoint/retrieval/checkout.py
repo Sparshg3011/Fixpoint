@@ -10,10 +10,18 @@ One bare mirror per repo (cloned once, ~100-300MB), then one plain tree per
   idempotent + cheap trees are cached by (repo, first 12 of commit); repeat
                      calls return instantly, so the eval harness can call this
                      per instance without thinking about it.
+
+`FIXPOINT_SHALLOW_CLONES=1` switches the mirror from "clone the whole history"
+to "fetch the one commit we were asked about". A benchmark campaign wants the
+full mirror — it revisits dozens of commits per repo and pays for the history
+once. A hosted deployment is the opposite case: one commit, once, on a sliver
+of a CPU, where cloning django's full history cost eleven minutes before the
+agent could read a single file.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import threading
@@ -60,12 +68,38 @@ def _git(*args: str) -> None:
         raise RuntimeError(f"git {' '.join(args)} failed:\n{proc.stderr.strip()}")
 
 
+def shallow_mode() -> bool:
+    """Read at call time, never cached: tests and the server toggle it."""
+    return bool(os.environ.get("FIXPOINT_SHALLOW_CLONES"))
+
+
+def origin_url(repo: str) -> str:
+    """Where a mirror is fetched from. A seam: tests point it at a local repo."""
+    return f"https://github.com/{repo}.git"
+
+
+def _pin_ref(commit: str) -> str:
+    """A shallow mirror is built by `git init` and so has no refs at all, and
+    `git clone` transfers only what some ref makes reachable. Without this pin
+    the PR flow would clone an empty repository."""
+    return f"refs/heads/fixpoint-pin-{commit[:12]}"
+
+
+def _has_commit(bare: Path, commit: str) -> bool:
+    return subprocess.run(
+        ["git", "--git-dir", str(bare), "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True).returncode == 0
+
+
 def bare_path(repo: str) -> Path:
     """Ensure a bare mirror of github.com/<repo> exists; return its path.
 
     Clone lands in a temp dir and is renamed into place — `git clone` straight
     into the destination would let a killed clone masquerade as a complete
-    mirror forever (dest.exists() is the only completeness check we have)."""
+    mirror forever (dest.exists() is the only completeness check we have).
+
+    In shallow mode the mirror starts EMPTY: an initialised bare repo with an
+    origin, holding no objects until someone asks for a commit."""
     dest = BARE_DIR / f"{repo.replace('/', '__')}.git"
     if dest.exists():
         return dest
@@ -76,9 +110,35 @@ def bare_path(repo: str) -> Path:
         tmp = dest.with_suffix(".tmp")
         if tmp.exists():
             shutil.rmtree(tmp)
-        _git("clone", "--bare", f"https://github.com/{repo}.git", str(tmp))
+        if shallow_mode():
+            _git("init", "--bare", "--quiet", str(tmp))
+            _git("--git-dir", str(tmp), "remote", "add", "origin", origin_url(repo))
+        else:
+            _git("clone", "--bare", origin_url(repo), str(tmp))
         _finalize(tmp, dest)
     return dest
+
+
+def ensure_commit(repo: str, commit: str) -> Path:
+    """The repo's mirror, guaranteed to contain `commit` — fetching it if the
+    mirror is shallow, new, or was evicted by the cache trimmer.
+
+    Returned mirrors are safe to `git clone` locally: in shallow mode the
+    commit is pinned under a ref first, because an unreferenced object does
+    not survive a clone.
+    """
+    bare = bare_path(repo)
+    if _has_commit(bare, commit):
+        return bare
+    with _lock_for(f"fetch:{repo}:{commit[:12]}"):
+        if not _has_commit(bare, commit):
+            # Full mirrors carry every branch and tag, so a base commit is
+            # normally already here and this fetch is an exotic-case fallback.
+            depth = ["--depth", "1"] if shallow_mode() else []
+            _git("--git-dir", str(bare), "fetch", "--quiet", *depth, "origin", commit)
+        if shallow_mode():
+            _git("--git-dir", str(bare), "update-ref", _pin_ref(commit), commit)
+    return bare
 
 
 def tree_at(repo: str, commit: str) -> Path:
@@ -89,14 +149,7 @@ def tree_at(repo: str, commit: str) -> Path:
     with _lock_for(f"tree:{dest.name}"):
         if dest.exists():
             return dest
-        bare = bare_path(repo)
-        # Bare clones carry all branches/tags; base commits are ancestors of the
-        # default branch so this fetch is only a fallback for exotic cases.
-        probe = subprocess.run(
-            ["git", "--git-dir", str(bare), "cat-file", "-e", f"{commit}^{{commit}}"],
-            capture_output=True)
-        if probe.returncode != 0:
-            _git("--git-dir", str(bare), "fetch", "origin", commit)
+        bare = ensure_commit(repo, commit)
         # Extract into a temp dir and rename, so an interrupted extraction can
         # never masquerade as a complete cached tree.
         tmp = dest.with_suffix(".tmp")

@@ -36,6 +36,9 @@ ENV PYTHONUNBUFFERED=1 \
     GIT_TERMINAL_PROMPT=0 \
     # small host disks: drop extracted trees after each run, cap the mirror cache
     FIXPOINT_EPHEMERAL_TREES=1 \
+    # fetch the one commit a run needs instead of the repo's whole history:
+    # django goes from an 11-minute clone to a 4-second one, 283 MB to 12 MB
+    FIXPOINT_SHALLOW_CLONES=1 \
     FIXPOINT_CACHE_MAX_MB=2000 \
     FIXPOINT_MAX_CONCURRENT=1 \
     FIXPOINT_MAX_REPO_MB=400 \

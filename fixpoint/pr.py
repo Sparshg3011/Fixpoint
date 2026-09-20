@@ -27,7 +27,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from fixpoint.retrieval.checkout import bare_path
+from fixpoint.retrieval.checkout import ensure_commit
 
 
 class PRSafetyError(Exception):
@@ -136,7 +136,11 @@ def open_pr(*, upstream: str, base_commit: str, patch: str, instance_id: str,
     # cached mirrors the retrieval layer depends on.
     with tempfile.TemporaryDirectory() as td:
         work = Path(td) / "repo"
-        _git("clone", "--quiet", "--no-checkout", str(bare_path(upstream)), str(work))
+        # ensure_commit, not bare_path: the mirror may be shallow, or may have
+        # been evicted between the run and this click, and a clone can only
+        # carry a commit some ref points at.
+        mirror = ensure_commit(upstream, base_commit)
+        _git("clone", "--quiet", "--no-checkout", str(mirror), str(work))
         _git("checkout", "-q", "-b", base_branch, base_commit, cwd=work)
 
         patch_file = work.parent / "patch.diff"
